@@ -1,4 +1,4 @@
-import { BLACK, WHITE } from './board.js';
+import { BLACK, WHITE, oppositeColor } from './board.js';
 import { hasValidMove } from './flip-rule.js';
 
 /**
@@ -36,8 +36,6 @@ export const getWinner = (board) => {
  */
 export const isGameOver = (board) => !hasValidMove(board, BLACK) && !hasValidMove(board, WHITE);
 
-const opposite = (color) => (color === BLACK ? WHITE : BLACK);
-
 /**
  * 直前に `justMovedColor` が着手した後の、次の手番を返す。
  * 相手に着手可能な手があれば相手番、なければ（相手がパス）自分に着手可能な手が
@@ -47,7 +45,7 @@ const opposite = (color) => (color === BLACK ? WHITE : BLACK);
  * @returns {number | null} 次の手番の色。ゲーム終了の場合は `null`
  */
 export const getNextTurn = (board, justMovedColor) => {
-  const opponent = opposite(justMovedColor);
+  const opponent = oppositeColor(justMovedColor);
   if (hasValidMove(board, opponent)) return opponent;
   if (hasValidMove(board, justMovedColor)) return justMovedColor;
   return null;

@@ -1,4 +1,4 @@
-import { BOARD_SIZE, EMPTY, BLACK, WHITE, isOnBoard, indexOf } from './board.js';
+import { BOARD_SIZE, EMPTY, isOnBoard, indexOf, oppositeColor } from './board.js';
 
 /**
  * 26方向の探索ベクトル。`(0,0,0)` を除く `dx, dy, dz ∈ {-1, 0, 1}` の全組み合わせ。
@@ -15,8 +15,6 @@ for (let dz = -1; dz <= 1; dz++) {
   }
 }
 
-const opposite = (color) => (color === BLACK ? WHITE : BLACK);
-
 /**
  * 指定した座標に `color` の石を置いた場合に反転する座標一覧を返す。
  * アルゴリズムの正本: [othello-3d-flip-rule](../../.claude/skills/othello-3d-flip-rule/SKILL.md)
@@ -31,7 +29,7 @@ export const getFlippableStones = (board, x0, y0, z0, color) => {
   if (!isOnBoard(x0, y0, z0)) return [];
   if (board[indexOf(x0, y0, z0)] !== EMPTY) return [];
 
-  const opponent = opposite(color);
+  const opponent = oppositeColor(color);
   const flippable = [];
 
   for (const [dx, dy, dz] of DIRECTIONS_3D) {

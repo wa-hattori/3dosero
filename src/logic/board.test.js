@@ -9,6 +9,7 @@ import {
   isOnBoard,
   createEmptyBoard,
   createInitialBoard,
+  oppositeColor,
 } from './board.js';
 
 test('BOARD_SIZE is 8', () => {
@@ -18,6 +19,14 @@ test('BOARD_SIZE is 8', () => {
 test('EMPTY, BLACK, WHITE are distinct values', () => {
   const values = new Set([EMPTY, BLACK, WHITE]);
   assert.equal(values.size, 3);
+});
+
+test('oppositeColor returns WHITE for BLACK', () => {
+  assert.equal(oppositeColor(BLACK), WHITE);
+});
+
+test('oppositeColor returns BLACK for WHITE', () => {
+  assert.equal(oppositeColor(WHITE), BLACK);
 });
 
 test('indexOf maps the origin to index 0', () => {

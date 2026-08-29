@@ -9,6 +9,13 @@ export const BLACK = 1;
 export const WHITE = 2;
 
 /**
+ * 指定した石の色の相手の色を返す。
+ * @param {number} color - `BLACK` または `WHITE`
+ * @returns {number} 相手の色（`BLACK` なら `WHITE`、`WHITE` なら `BLACK`）
+ */
+export const oppositeColor = (color) => (color === BLACK ? WHITE : BLACK);
+
+/**
  * 3D coordinates を盤面配列（`Int8Array`、長さ `BOARD_SIZE ** 3`）上のフラットな
  * インデックスに変換する。
  * @param {number} x - x座標（0〜BOARD_SIZE-1）
