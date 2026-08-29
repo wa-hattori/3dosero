@@ -1,4 +1,4 @@
-import { BLACK, WHITE, oppositeColor } from './board.js';
+import { BOARD_SIZE, BLACK, WHITE, oppositeColor } from './board.js';
 import { hasValidMove } from './flip-rule.js';
 
 /**
@@ -32,9 +32,11 @@ export const getWinner = (board) => {
  * ゲームが終了しているかどうかを判定する。
  * 両者とも着手可能な手が1つもなければ終了（盤面が満杯の場合も、この条件で自動的に含まれる）。
  * @param {Int8Array} board - 現在の盤面状態
+ * @param {number} [boardSize] - 盤面サイズ（省略時は `BOARD_SIZE`）
  * @returns {boolean} ゲームが終了していれば true
  */
-export const isGameOver = (board) => !hasValidMove(board, BLACK) && !hasValidMove(board, WHITE);
+export const isGameOver = (board, boardSize = BOARD_SIZE) =>
+  !hasValidMove(board, BLACK, boardSize) && !hasValidMove(board, WHITE, boardSize);
 
 /**
  * 直前に `justMovedColor` が着手した後の、次の手番を返す。
@@ -42,11 +44,12 @@ export const isGameOver = (board) => !hasValidMove(board, BLACK) && !hasValidMov
  * あれば自分番、どちらも着手できなければゲーム終了として `null` を返す。
  * @param {Int8Array} board - 現在の盤面状態
  * @param {number} justMovedColor - 直前に着手した色（`BLACK` または `WHITE`）
+ * @param {number} [boardSize] - 盤面サイズ（省略時は `BOARD_SIZE`）
  * @returns {number | null} 次の手番の色。ゲーム終了の場合は `null`
  */
-export const getNextTurn = (board, justMovedColor) => {
+export const getNextTurn = (board, justMovedColor, boardSize = BOARD_SIZE) => {
   const opponent = oppositeColor(justMovedColor);
-  if (hasValidMove(board, opponent)) return opponent;
-  if (hasValidMove(board, justMovedColor)) return justMovedColor;
+  if (hasValidMove(board, opponent, boardSize)) return opponent;
+  if (hasValidMove(board, justMovedColor, boardSize)) return justMovedColor;
   return null;
 };
