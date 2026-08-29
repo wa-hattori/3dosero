@@ -37,9 +37,11 @@ const heroScene = createHeroScene(heroCanvas);
 
 const spaceAudio = createSpaceAudio();
 createMuteToggle(uiOverlay, (muted) => spaceAudio.setMuted(muted));
-// AudioContextはユーザー操作に応答してのみ生成できるため、ページ内で最初に
-// 検出したポインタ操作をきっかけにスタート画面用BGMを開始する。
-document.addEventListener('pointerdown', () => spaceAudio.play('start'), { once: true });
+// AudioContextはユーザー操作に応答してのみ生成できる。ブラウザの自動再生ポリシーが
+// 確実に「ユーザー操作」と認識するのは click（pointerdown/mousedownは環境によって
+// 認識されないことがある）のため、ページ内で最初に検出したclickをきっかけに
+// スタート画面用BGMを開始する。
+document.addEventListener('click', () => spaceAudio.play('start'), { once: true });
 
 /**
  * 選択された対戦モード・盤面サイズで対局を開始する。3Dシーン・ゲーム状態・UIを一式構築する。
