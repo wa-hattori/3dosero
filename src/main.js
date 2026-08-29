@@ -46,7 +46,6 @@ document.addEventListener('pointerdown', () => spaceAudio.play('start'), { once:
  * @param {{ battleMode: string, boardSize: number }} selection - スタート画面での選択内容
  */
 const startGame = ({ battleMode, boardSize }) => {
-  // battleMode（'cpu' | 'local'）によるCPU自動着手は別コミットで配線する。
   heroScene.stop();
   heroCanvas.style.display = 'none';
   spaceAudio.play('battle');
