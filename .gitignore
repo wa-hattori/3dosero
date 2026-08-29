@@ -33,3 +33,6 @@ venv/
 
 # ML training checkpoints (regenerate via training/ scripts; not committed)
 training/checkpoints/
+
+# GAN CPU ONNX models (large binary artifacts; distributed separately, not committed)
+data/models/
