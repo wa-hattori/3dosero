@@ -16,6 +16,7 @@ import torch
 from training.network import PolicyValueNetwork
 from training.train import (
     checkpoint_path,
+    parse_checkpoint_path,
     save_checkpoint,
     should_save_checkpoint,
     train_step,
@@ -118,6 +119,21 @@ def test_checkpoint_path_follows_board_size_and_zero_padded_game_count_conventio
     path = checkpoint_path(tmp_path, board_size=8, games_played=200)
 
     assert path == tmp_path / "8" / "game_000200.pt"
+
+
+def test_parse_checkpoint_path_round_trips_with_checkpoint_path(tmp_path: Path) -> None:
+    path = checkpoint_path(tmp_path, board_size=8, games_played=150)
+
+    assert parse_checkpoint_path(path) == (8, 150)
+
+
+def test_parse_checkpoint_path_rejects_a_path_with_the_wrong_naming_convention(
+    tmp_path: Path,
+) -> None:
+    bad_path = tmp_path / "8" / "not-a-checkpoint.pt"
+
+    with pytest.raises(ValueError, match="naming convention"):
+        parse_checkpoint_path(bad_path)
 
 
 def test_should_save_checkpoint_true_at_exact_multiples_of_interval() -> None:

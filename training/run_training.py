@@ -40,7 +40,12 @@ from training.config import (
 )
 from training.network import PolicyValueNetwork
 from training.self_play import SelfPlayExample, play_self_play_game
-from training.train import save_checkpoint, should_save_checkpoint, train_step
+from training.train import (
+    parse_checkpoint_path,
+    save_checkpoint,
+    should_save_checkpoint,
+    train_step,
+)
 
 DEFAULT_CHECKPOINT_ROOT = Path("training/checkpoints")
 DEFAULT_REPLAY_BUFFER_CAPACITY = 20000
@@ -123,14 +128,26 @@ def run_training(
     temperature_move_threshold: int = TEMPERATURE_MOVE_THRESHOLD,
     train_steps_per_game: int = DEFAULT_TRAIN_STEPS_PER_GAME,
     replay_buffer_capacity: int = DEFAULT_REPLAY_BUFFER_CAPACITY,
+    resume_from: Path | None = None,
     rng: np.random.Generator | None = None,
     log_fn: Callable[[str], None] = print,
 ) -> Path:
     """自己対戦→学習→チェックポイント保存ループを実行する。
 
+    `resume_from` を指定すると、そのチェックポイントのネットワーク重みを読み込んで
+    続きから学習する。**重みのみを復元し、オプティマイザ（Adam）の内部状態は復元しない**
+    （SKILL.mdの「チェックポイント方針」がチェックポイントを重みのみと定めているため、
+    保存フォーマットを変更しない設計判断。オプティマイザの学習率適応が数ステップ
+    再ウォームアップされる程度の影響で、続きから学習すること自体は成立する）。
+    ゲーム数の通し番号は、チェックポイントのファイル名（`train.checkpoint_path`の
+    命名規約）から自動的に読み取って引き継ぐため、`total_games` は「これから追加で
+    実行する自己対戦ゲーム数」を意味する（再開前の合計ではない）。
+
     Args:
-        board_size: 盤面の1辺のマス数。
-        total_games: 実行する自己対戦ゲーム数。
+        board_size: 盤面の1辺のマス数。`resume_from` を指定する場合、そのチェックポイントの
+            保存時と一致している必要がある（不一致は `ValueError`）。
+        total_games: 実行する自己対戦ゲーム数（`resume_from` 指定時は再開後に追加で
+            実行するゲーム数）。
         num_simulations: 1手あたりのMCTSシミュレーション回数。
         device: 推論・学習を実行するデバイス。
         checkpoint_root: チェックポイントの保存先ルートディレクトリ。
@@ -138,27 +155,48 @@ def run_training(
         batch_size: 1学習ステップあたりのバッチサイズ。
         learning_rate: Adamオプティマイザの学習率。
         l2_weight_decay: L2正則化の重み。
-        num_residual_blocks: ネットワークの残差ブロック数。
-        base_channels: ネットワークのStem/残差ブロックのチャンネル数。
+        num_residual_blocks: ネットワークの残差ブロック数（`resume_from` 指定時は
+            そのチェックポイントの保存時と一致している必要がある）。
+        base_channels: ネットワークのStem/残差ブロックのチャンネル数（`resume_from`
+            指定時はそのチェックポイントの保存時と一致している必要がある）。
         temperature_move_threshold: 自己対戦でサンプリングから貪欲に切り替える手数。
         train_steps_per_game: 1局終えるごとに実行する学習ステップ数。
         replay_buffer_capacity: リプレイバッファの最大保持サンプル数。
+        resume_from: 学習を再開する元のチェックポイントファイル。省略時は新規に
+            ネットワークを初期化する。
         rng: 乱数生成器。省略時は新規生成する。
         log_fn: 進捗ログの出力先関数（デフォルトは`print`）。
 
     Returns:
         最後に保存されたチェックポイントのパス（`total_games`終了時点で
         `checkpoint_interval_games`の倍数でなければ、最終状態を追加で保存する）。
+
+    Raises:
+        ValueError: `resume_from` のチェックポイントの盤面サイズが `board_size` と
+            一致しない場合。
     """
     rng = rng if rng is not None else np.random.default_rng()
     network = PolicyValueNetwork(board_size, num_residual_blocks, base_channels).to(device)
+
+    starting_games_played = 0
+    if resume_from is not None:
+        checkpoint_board_size, starting_games_played = parse_checkpoint_path(resume_from)
+        if checkpoint_board_size != board_size:
+            raise ValueError(
+                f"resume_from checkpoint is for board_size={checkpoint_board_size}, "
+                f"but board_size={board_size} was requested"
+            )
+        network.load_state_dict(torch.load(resume_from, map_location=device, weights_only=True))
+        log_fn(f"resumed from {resume_from} (games_played={starting_games_played})")
+
     optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate)
     buffer = ReplayBuffer(capacity=replay_buffer_capacity)
 
     last_checkpoint_path: Path | None = None
     last_checkpoint_games: int | None = None
+    final_games_played = starting_games_played + total_games
 
-    for games_played in range(1, total_games + 1):
+    for games_played in range(starting_games_played + 1, final_games_played + 1):
         start = time.monotonic()
         network.eval()
         examples = play_self_play_game(
@@ -177,7 +215,7 @@ def run_training(
 
         avg_loss = sum(losses) / len(losses) if losses else float("nan")
         log_fn(
-            f"game={games_played}/{total_games} moves={len(examples)} "
+            f"game={games_played}/{final_games_played} moves={len(examples)} "
             f"buffer={len(buffer)} avg_loss={avg_loss:.4f} "
             f"self_play_sec={elapsed_self_play:.1f}"
         )
@@ -189,8 +227,10 @@ def run_training(
             last_checkpoint_games = games_played
             log_fn(f"saved checkpoint: {last_checkpoint_path}")
 
-    if last_checkpoint_games != total_games:
-        last_checkpoint_path = save_checkpoint(network, checkpoint_root, board_size, total_games)
+    if last_checkpoint_games != final_games_played:
+        last_checkpoint_path = save_checkpoint(
+            network, checkpoint_root, board_size, final_games_played
+        )
         log_fn(f"saved final checkpoint: {last_checkpoint_path}")
 
     assert last_checkpoint_path is not None
@@ -206,11 +246,22 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint-root", type=Path, default=DEFAULT_CHECKPOINT_ROOT)
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--resume-from",
+        type=Path,
+        default=None,
+        help="既存チェックポイントから続きを学習する。--total-gamesは追加ゲーム数を意味する。",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
-    """CLIエントリポイント。`python -m training.run_training --board-size 8 --total-games 100`。"""
+    """CLIエントリポイント。
+
+    新規学習: `python -m training.run_training --board-size 8 --total-games 100`
+    再開:     `python -m training.run_training --board-size 8 --total-games 50 \\
+                --resume-from training/checkpoints/8/game_000100.pt`
+    """
     args = _parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     rng = np.random.default_rng(args.seed)
@@ -222,6 +273,7 @@ def main() -> None:
         checkpoint_root=args.checkpoint_root,
         checkpoint_interval_games=args.checkpoint_interval_games,
         batch_size=args.batch_size,
+        resume_from=args.resume_from,
         rng=rng,
     )
 

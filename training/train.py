@@ -117,6 +117,32 @@ def save_checkpoint(
     return path
 
 
+def parse_checkpoint_path(path: Path) -> tuple[int, int]:
+    """`checkpoint_path` が組み立てたパスから `(board_size, games_played)` を復元する。
+
+    学習再開（`run_training.run_training` の `resume_from`）で、チェックポイントの
+    ファイル名からそれまでに完了した自己対戦ゲーム数を読み取るために使う。
+
+    Args:
+        path: `checkpoint_path` の命名規約（`{root}/{board_size}/game_{n:06d}.pt`）に
+            従うチェックポイントファイルのパス。
+
+    Returns:
+        `(board_size, games_played)` のタプル。
+
+    Raises:
+        ValueError: パスが命名規約に従っていない場合。
+    """
+    try:
+        board_size = int(path.parent.name)
+        games_played = int(path.stem.removeprefix("game_"))
+    except ValueError as error:
+        raise ValueError(
+            f"{path} does not follow the '{{board_size}}/game_{{n:06d}}.pt' naming convention"
+        ) from error
+    return board_size, games_played
+
+
 def should_save_checkpoint(
     games_played: int, checkpoint_interval_games: int = CHECKPOINT_INTERVAL_GAMES
 ) -> bool:

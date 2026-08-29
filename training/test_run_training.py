@@ -129,6 +129,80 @@ def test_run_training_smoke_runs_and_saves_a_checkpoint(
     assert len(checkpoint_lines) == 2
 
 
+def test_run_training_resumes_from_a_previous_checkpoint_and_continues_game_numbering(
+    cuda_device: torch.device, tmp_path: Path
+) -> None:
+    first_checkpoint = run_training(
+        board_size=TEST_BOARD_SIZE,
+        total_games=2,
+        num_simulations=TEST_NUM_SIMULATIONS,
+        device=cuda_device,
+        checkpoint_root=tmp_path,
+        checkpoint_interval_games=2,
+        batch_size=TEST_BATCH_SIZE,
+        num_residual_blocks=TEST_NUM_RESIDUAL_BLOCKS,
+        base_channels=TEST_BASE_CHANNELS,
+        train_steps_per_game=1,
+        rng=np.random.default_rng(0),
+    )
+    assert first_checkpoint == tmp_path / str(TEST_BOARD_SIZE) / "game_000002.pt"
+
+    log_lines: list[str] = []
+    second_checkpoint = run_training(
+        board_size=TEST_BOARD_SIZE,
+        total_games=2,
+        num_simulations=TEST_NUM_SIMULATIONS,
+        device=cuda_device,
+        checkpoint_root=tmp_path,
+        checkpoint_interval_games=2,
+        batch_size=TEST_BATCH_SIZE,
+        num_residual_blocks=TEST_NUM_RESIDUAL_BLOCKS,
+        base_channels=TEST_BASE_CHANNELS,
+        train_steps_per_game=1,
+        resume_from=first_checkpoint,
+        rng=np.random.default_rng(1),
+        log_fn=log_lines.append,
+    )
+
+    # 再開後はゲーム数の通し番号が引き継がれ、game_000002.ptの続きから
+    # game_000004.ptに保存される(1から数え直さない)。
+    assert second_checkpoint == tmp_path / str(TEST_BOARD_SIZE) / "game_000004.pt"
+    assert any("resumed from" in line and str(first_checkpoint) in line for line in log_lines)
+    assert any("game=3/4" in line for line in log_lines)
+    assert any("game=4/4" in line for line in log_lines)
+
+
+def test_run_training_resume_rejects_a_board_size_mismatch(
+    cuda_device: torch.device, tmp_path: Path
+) -> None:
+    checkpoint = run_training(
+        board_size=TEST_BOARD_SIZE,
+        total_games=1,
+        num_simulations=TEST_NUM_SIMULATIONS,
+        device=cuda_device,
+        checkpoint_root=tmp_path,
+        checkpoint_interval_games=1,
+        batch_size=TEST_BATCH_SIZE,
+        num_residual_blocks=TEST_NUM_RESIDUAL_BLOCKS,
+        base_channels=TEST_BASE_CHANNELS,
+        train_steps_per_game=1,
+        rng=np.random.default_rng(0),
+    )
+
+    with pytest.raises(ValueError, match="board_size"):
+        run_training(
+            board_size=6,
+            total_games=1,
+            num_simulations=TEST_NUM_SIMULATIONS,
+            device=cuda_device,
+            checkpoint_root=tmp_path,
+            num_residual_blocks=TEST_NUM_RESIDUAL_BLOCKS,
+            base_channels=TEST_BASE_CHANNELS,
+            resume_from=checkpoint,
+            rng=np.random.default_rng(0),
+        )
+
+
 def test_run_training_saves_final_checkpoint_when_not_on_interval_boundary(
     cuda_device: torch.device, tmp_path: Path
 ) -> None:
