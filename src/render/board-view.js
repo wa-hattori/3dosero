@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BOARD_SIZE } from '../logic/board.js';
-import { CELL_SIZE, logicToWorld } from './board-layout.js';
+import { CELL_SIZE, LAYER_THICKNESS, logicToWorld, getLayerSurfaceY } from './board-layout.js';
 
 const GRID_COLOR = 0x000000;
 const PLANE_COLOR = 0x2f7a3d;
@@ -8,7 +8,7 @@ const PLANE_OPACITY = 0.35;
 /** 特定の1層だけに絞り込んだ時の不透明度（他層は非表示になるため、より濃く見せる）。 */
 const SINGLE_LAYER_PLANE_OPACITY = 0.85;
 const GRID_OPACITY = 0.55;
-/** z-fighting防止のため、グリッド線を面よりわずかに浮かせる。 */
+/** z-fighting防止のため、グリッド線を板の上面よりわずかに浮かせる。 */
 const GRID_Y_OFFSET = 0.01;
 
 /**
@@ -27,7 +27,7 @@ export const createBoardView = (scene) => {
   const group = new THREE.Group();
   const boardExtent = BOARD_SIZE * CELL_SIZE;
 
-  const planeGeometry = new THREE.PlaneGeometry(boardExtent, boardExtent);
+  const planeGeometry = new THREE.BoxGeometry(boardExtent, LAYER_THICKNESS, boardExtent);
   const planeMaterial = new THREE.MeshStandardMaterial({
     color: PLANE_COLOR,
     transparent: true,
@@ -43,13 +43,12 @@ export const createBoardView = (scene) => {
     const layerY = logicToWorld(0, 0, z).y;
 
     const plane = new THREE.Mesh(planeGeometry, planeMaterial);
-    plane.rotation.x = -Math.PI / 2;
     plane.position.y = layerY;
     group.add(plane);
     planeMeshes.push(plane);
 
     const gridHelper = new THREE.GridHelper(boardExtent, BOARD_SIZE, GRID_COLOR, GRID_COLOR);
-    gridHelper.position.y = layerY + GRID_Y_OFFSET;
+    gridHelper.position.y = getLayerSurfaceY(z) + GRID_Y_OFFSET;
     gridHelper.material.transparent = true;
     gridHelper.material.opacity = GRID_OPACITY;
     group.add(gridHelper);

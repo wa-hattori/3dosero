@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { BOARD_SIZE } from '../logic/board.js';
-import { CELL_SIZE, logicToWorld } from './board-layout.js';
+import { CELL_SIZE, logicToWorld, getLayerSurfaceY } from './board-layout.js';
 
 const HIGHLIGHT_COLOR = 0xbbbbbb;
 const HIGHLIGHT_OPACITY = 0.55;
 const HIGHLIGHT_SIZE_RATIO = 0.9;
-/** z-fighting防止のため、ハイライト面をグリッド線よりわずかに浮かせる。 */
+/** z-fighting防止のため、ハイライト面を板の上面・グリッド線よりわずかに浮かせる。 */
 const HIGHLIGHT_Y_OFFSET = 0.02;
 /** 理論上取りうる最大着手可能マス数（盤面の全マス）。InstancedMeshの安全な上限値。 */
 const MAX_HIGHLIGHTS = BOARD_SIZE * BOARD_SIZE * BOARD_SIZE;
@@ -46,7 +46,7 @@ export const createHighlightView = (scene) => {
   const update = (moves) => {
     moves.forEach(([x, y, z], index) => {
       const world = logicToWorld(x, y, z);
-      dummy.position.set(world.x, world.y + HIGHLIGHT_Y_OFFSET, world.z);
+      dummy.position.set(world.x, getLayerSurfaceY(z) + HIGHLIGHT_Y_OFFSET, world.z);
       dummy.rotation.set(-Math.PI / 2, 0, 0);
       dummy.updateMatrix();
       mesh.setMatrixAt(index, dummy.matrix);
