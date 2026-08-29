@@ -120,9 +120,7 @@ class PolicyValueNetwork(nn.Module):
         return policy_logits, value
 
 
-def mask_policy_logits(
-    policy_logits: torch.Tensor, legal_moves_mask: torch.Tensor
-) -> torch.Tensor:
+def mask_policy_logits(policy_logits: torch.Tensor, legal_moves_mask: torch.Tensor) -> torch.Tensor:
     """合法手以外を`-inf`でマスクしてからsoftmaxした方策確率を返す。
 
     SKILL.mdの方策ヘッド仕様（「合法手以外を`-inf`でマスクしてから`softmax`」）を

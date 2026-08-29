@@ -22,9 +22,9 @@ def cuda_device() -> torch.device:
 def test_forward_returns_policy_shape_of_board_size_cubed(cuda_device: torch.device) -> None:
     board_size = 4
     batch_size = 2
-    network = PolicyValueNetwork(
-        board_size=board_size, num_residual_blocks=1, base_channels=8
-    ).to(cuda_device)
+    network = PolicyValueNetwork(board_size=board_size, num_residual_blocks=1, base_channels=8).to(
+        cuda_device
+    )
     x = torch.zeros(batch_size, 2, board_size, board_size, board_size, device=cuda_device)
 
     policy_logits, _value = network(x)
@@ -35,9 +35,9 @@ def test_forward_returns_policy_shape_of_board_size_cubed(cuda_device: torch.dev
 def test_forward_returns_value_shape_of_one(cuda_device: torch.device) -> None:
     board_size = 4
     batch_size = 3
-    network = PolicyValueNetwork(
-        board_size=board_size, num_residual_blocks=2, base_channels=8
-    ).to(cuda_device)
+    network = PolicyValueNetwork(board_size=board_size, num_residual_blocks=2, base_channels=8).to(
+        cuda_device
+    )
     x = torch.zeros(batch_size, 2, board_size, board_size, board_size, device=cuda_device)
 
     _policy_logits, value = network(x)
@@ -48,9 +48,9 @@ def test_forward_returns_value_shape_of_one(cuda_device: torch.device) -> None:
 def test_forward_value_is_bounded_by_tanh_range(cuda_device: torch.device) -> None:
     board_size = 4
     batch_size = 4
-    network = PolicyValueNetwork(
-        board_size=board_size, num_residual_blocks=1, base_channels=8
-    ).to(cuda_device)
+    network = PolicyValueNetwork(board_size=board_size, num_residual_blocks=1, base_channels=8).to(
+        cuda_device
+    )
     x = torch.randn(batch_size, 2, board_size, board_size, board_size, device=cuda_device)
 
     _policy_logits, value = network(x)
@@ -61,9 +61,9 @@ def test_forward_value_is_bounded_by_tanh_range(cuda_device: torch.device) -> No
 
 def test_forward_runs_on_cuda_device(cuda_device: torch.device) -> None:
     board_size = 4
-    network = PolicyValueNetwork(
-        board_size=board_size, num_residual_blocks=1, base_channels=8
-    ).to(cuda_device)
+    network = PolicyValueNetwork(board_size=board_size, num_residual_blocks=1, base_channels=8).to(
+        cuda_device
+    )
     x = torch.zeros(1, 2, board_size, board_size, board_size, device=cuda_device)
 
     policy_logits, value = network(x)
@@ -74,9 +74,9 @@ def test_forward_runs_on_cuda_device(cuda_device: torch.device) -> None:
 
 def test_forward_supports_larger_board_size(cuda_device: torch.device) -> None:
     board_size = 8
-    network = PolicyValueNetwork(
-        board_size=board_size, num_residual_blocks=1, base_channels=4
-    ).to(cuda_device)
+    network = PolicyValueNetwork(board_size=board_size, num_residual_blocks=1, base_channels=4).to(
+        cuda_device
+    )
     x = torch.zeros(1, 2, board_size, board_size, board_size, device=cuda_device)
 
     policy_logits, value = network(x)
