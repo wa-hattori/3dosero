@@ -28,6 +28,7 @@ const opposite = (color) => (color === BLACK ? WHITE : BLACK);
  * @returns {Array<[number, number, number]>} 反転対象の座標一覧（置けない場合は空配列）
  */
 export const getFlippableStones = (board, x0, y0, z0, color) => {
+  if (!isOnBoard(x0, y0, z0)) return [];
   if (board[indexOf(x0, y0, z0)] !== EMPTY) return [];
 
   const opponent = opposite(color);

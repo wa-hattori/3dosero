@@ -68,6 +68,38 @@ test('does not allow placing on top of an existing stone', () => {
   assert.deepEqual(flippable, []);
 });
 
+test('does not flip when an opponent run is followed by an empty cell instead of a terminator', () => {
+  const board = place(createEmptyBoard(), 1, 0, 0, WHITE);
+  const flippable = getFlippableStones(board, 0, 0, 0, BLACK);
+  assert.deepEqual(flippable, []);
+});
+
+test('returns no flippable stones for an out-of-board target coordinate', () => {
+  // x0 = BOARD_SIZE aliases with index BOARD_SIZE in a naive flat-array
+  // implementation (same as (0, 1, 0)); this must not be treated as a valid,
+  // empty placement target.
+  let board = createEmptyBoard();
+  board = place(board, 7, 0, 0, WHITE);
+  board = place(board, 6, 0, 0, BLACK);
+  const flippable = getFlippableStones(board, 8, 0, 0, BLACK);
+  assert.deepEqual(flippable, []);
+});
+
+test('isValidMove is false for an out-of-board target coordinate', () => {
+  let board = createEmptyBoard();
+  board = place(board, 7, 0, 0, WHITE);
+  board = place(board, 6, 0, 0, BLACK);
+  assert.equal(isValidMove(board, 8, 0, 0, BLACK), false);
+});
+
+test('applyMove returns null and does not corrupt the board for an out-of-board target coordinate', () => {
+  let board = createEmptyBoard();
+  board = place(board, 7, 0, 0, WHITE);
+  board = place(board, 6, 0, 0, BLACK);
+  const next = applyMove(board, 8, 0, 0, BLACK);
+  assert.equal(next, null);
+});
+
 test('flips stones in multiple directions on the same plane at once', () => {
   let board = createEmptyBoard();
   // x方向: (2,3,0)=WHITE, (1,3,0)=BLACK
