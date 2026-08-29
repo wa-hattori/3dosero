@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DIRECTIONS_3D } from './flip-rule.js';
+import { BLACK, WHITE, createEmptyBoard, indexOf } from './board.js';
+import { DIRECTIONS_3D, getFlippableStones } from './flip-rule.js';
+
+const place = (board, x, y, z, color) => {
+  board[indexOf(x, y, z)] = color;
+  return board;
+};
+
+const sortStones = (stones) => [...stones].sort().map((stone) => stone.join(','));
 
 test('DIRECTIONS_3D has 26 vectors', () => {
   assert.equal(DIRECTIONS_3D.length, 26);
@@ -22,4 +30,10 @@ test('every DIRECTIONS_3D component is -1, 0, or 1', () => {
     ([dx, dy, dz]) => isValidComponent(dx) && isValidComponent(dy) && isValidComponent(dz),
   );
   assert.equal(allValid, true);
+});
+
+test('flips a single opponent stone in a straight line', () => {
+  const board = place(place(createEmptyBoard(), 1, 0, 0, WHITE), 2, 0, 0, BLACK);
+  const flippable = getFlippableStones(board, 0, 0, 0, BLACK);
+  assert.deepEqual(sortStones(flippable), sortStones([[1, 0, 0]]));
 });
