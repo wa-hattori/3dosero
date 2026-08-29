@@ -49,3 +49,15 @@ test('does not flip when an opponent run reaches the edge of the board without a
   const flippable = getFlippableStones(board, 6, 0, 0, BLACK);
   assert.deepEqual(flippable, []);
 });
+
+test('does not flip when the adjacent cell is already the same color', () => {
+  const board = place(createEmptyBoard(), 1, 0, 0, BLACK);
+  const flippable = getFlippableStones(board, 0, 0, 0, BLACK);
+  assert.deepEqual(flippable, []);
+});
+
+test('does not allow placing on top of an existing stone', () => {
+  const board = place(place(createEmptyBoard(), 0, 0, 0, WHITE), 1, 0, 0, WHITE);
+  const flippable = getFlippableStones(board, 0, 0, 0, BLACK);
+  assert.deepEqual(flippable, []);
+});
