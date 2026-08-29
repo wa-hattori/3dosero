@@ -1,27 +1,34 @@
-import { createInitialBoard, BLACK } from './logic/board.js';
+import { createInitialBoard, BLACK, oppositeColor } from './logic/board.js';
 import { getValidMoves, applyMove } from './logic/flip-rule.js';
-import { getNextTurn } from './logic/game-state.js';
+import { getNextTurn, getWinner } from './logic/game-state.js';
 import { createSceneManager } from './render/scene-manager.js';
 import { createCameraControls } from './render/camera-controls.js';
 import { createBoardView } from './render/board-view.js';
 import { createStoneView } from './render/stone-view.js';
 import { createHighlightView } from './render/highlight-view.js';
 import { createInteraction } from './ui/interaction.js';
+import { createStatusPanel } from './ui/status-panel.js';
 
 const canvas = document.getElementById('board-canvas');
+const uiOverlay = document.getElementById('ui-overlay');
+
 const sceneManager = createSceneManager(canvas);
 const cameraControls = createCameraControls(sceneManager.camera, canvas);
 createBoardView(sceneManager.scene);
 const stoneView = createStoneView(sceneManager.scene);
 const highlightView = createHighlightView(sceneManager.scene);
+const statusPanel = createStatusPanel(uiOverlay);
 
 let board = createInitialBoard();
 let currentTurn = BLACK;
 let validMoves = getValidMoves(board, currentTurn);
+let isOver = false;
+let winner = null;
 
-const render = () => {
+const render = (passedColor = null) => {
   stoneView.update(board);
   highlightView.update(validMoves);
+  statusPanel.update({ currentTurn, passedColor, isOver, winner });
 };
 
 render();
@@ -35,11 +42,16 @@ const handleMoveSelected = (instanceIndex) => {
   if (next === null) return;
 
   board = next;
+  const opponent = oppositeColor(currentTurn);
   const nextTurn = getNextTurn(board, currentTurn);
-  currentTurn = nextTurn ?? currentTurn;
-  validMoves = nextTurn === null ? [] : getValidMoves(board, currentTurn);
+  const passedColor = nextTurn === currentTurn ? opponent : null;
 
-  render();
+  isOver = nextTurn === null;
+  winner = isOver ? getWinner(board) : null;
+  currentTurn = nextTurn ?? currentTurn;
+  validMoves = isOver ? [] : getValidMoves(board, currentTurn);
+
+  render(passedColor);
 };
 
 createInteraction({
