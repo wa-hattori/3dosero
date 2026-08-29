@@ -21,3 +21,15 @@ npm-debug.log*
 
 # Coverage
 coverage/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# ML training checkpoints (regenerate via training/ scripts; not committed)
+training/checkpoints/
