@@ -15,7 +15,10 @@
       font-family: system-ui, -apple-system, 'Hiragino Sans', sans-serif;
     }
 
+    #hero-canvas,
     #board-canvas {
+      position: fixed;
+      inset: 0;
       display: block;
       width: 100%;
       height: 100%;
@@ -88,19 +91,35 @@
       align-items: center;
       justify-content: center;
       gap: 12px;
-      background: #111318;
+      background: transparent;
       text-align: center;
+    }
+
+    /* 背景は透過してhero-canvasの3D装飾を見せるため、この要素自体は
+       ポインタイベントを素通しする。`#ui-overlay > *` (pointer-events: auto) より
+       詳細度を上げるため `#ui-overlay > .start-screen` で上書きする。
+       ボタン類にだけ個別に auto を戻し、それ以外の領域でのドラッグが
+       hero-canvasのOrbitControlsに届くようにする。 */
+    #ui-overlay > .start-screen {
+      pointer-events: none;
+    }
+
+    .start-screen-modes button,
+    .start-screen-back {
+      pointer-events: auto;
     }
 
     .start-screen h1 {
       margin: 0;
       font-size: 2.5rem;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.1em;
+      text-shadow: 0 0 24px rgba(0, 0, 0, 0.9), 0 2px 4px rgba(0, 0, 0, 0.9);
     }
 
     .start-screen p {
       margin: 0;
-      opacity: 0.75;
+      opacity: 0.85;
+      text-shadow: 0 0 16px rgba(0, 0, 0, 0.9), 0 1px 3px rgba(0, 0, 0, 0.9);
     }
 
     .start-screen-modes {
@@ -113,7 +132,8 @@
       padding: 12px 24px;
       border-radius: 8px;
       border: 1px solid rgba(255, 255, 255, 0.3);
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(10, 12, 18, 0.55);
+      backdrop-filter: blur(2px);
       color: inherit;
       font-size: 1.1rem;
       font-family: inherit;
@@ -122,6 +142,31 @@
 
     .start-screen-modes button:hover {
       background: rgba(255, 255, 255, 0.18);
+    }
+
+    .start-screen-modes button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .start-screen-modes button:disabled:hover {
+      background: rgba(10, 12, 18, 0.55);
+    }
+
+    .start-screen-back {
+      margin-top: 8px;
+      padding: 6px 14px;
+      border: none;
+      background: transparent;
+      color: inherit;
+      opacity: 0.7;
+      font-size: 0.9rem;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .start-screen-back:hover {
+      opacity: 1;
     }
 
     .end-screen {
@@ -163,6 +208,45 @@
     .end-screen button:hover {
       background: rgba(255, 255, 255, 0.18);
     }
+
+    .mute-toggle {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      z-index: 10;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(10, 12, 18, 0.55);
+      color: inherit;
+      font-size: 1.2rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .mute-toggle:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    .title-button {
+      position: absolute;
+      top: 64px;
+      right: 16px;
+      z-index: 10;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(10, 12, 18, 0.55);
+      color: inherit;
+      font-size: 0.9rem;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .title-button:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
   </style>
   <script type="importmap">
     {
@@ -175,6 +259,7 @@
 </head>
 <body>
   <canvas id="board-canvas"></canvas>
+  <canvas id="hero-canvas"></canvas>
   <div id="ui-overlay"></div>
   <script type="module" src="src/main.js"></script>
 </body>

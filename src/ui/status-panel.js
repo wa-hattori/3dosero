@@ -12,6 +12,7 @@ const PASS_FLASH_CLASS = 'status-panel--pass-flash';
  *     passedColor: number | null,
  *     isOver: boolean,
  *     winner: number | null,
+ *     isCpuTurn?: boolean,
  *   }) => void,
  * }}
  */
@@ -22,9 +23,15 @@ export const createStatusPanel = (container) => {
 
   /**
    * 表示内容を更新する。
-   * @param {{currentTurn: number, passedColor: number | null, isOver: boolean, winner: number | null}} state
+   * @param {{
+   *   currentTurn: number,
+   *   passedColor: number | null,
+   *   isOver: boolean,
+   *   winner: number | null,
+   *   isCpuTurn?: boolean,
+   * }} state
    */
-  const update = ({ currentTurn, passedColor, isOver, winner }) => {
+  const update = ({ currentTurn, passedColor, isOver, winner, isCpuTurn = false }) => {
     if (isOver) {
       panel.classList.remove(PASS_FLASH_CLASS);
       panel.textContent = winner === null
@@ -34,7 +41,8 @@ export const createStatusPanel = (container) => {
     }
 
     const passNotice = passedColor === null ? '' : `（${COLOR_LABELS[passedColor]}はパス）`;
-    panel.textContent = `手番：${COLOR_LABELS[currentTurn]}${passNotice}（すばやく2回タップ/クリックで着手）`;
+    const actionHint = isCpuTurn ? '（CPU思考中…）' : '（すばやく2回タップ/クリックで着手）';
+    panel.textContent = `手番：${COLOR_LABELS[currentTurn]}${passNotice}${actionHint}`;
 
     // パス発生時のみ強調アニメーションを再生する。連続でパスが起きた場合も
     // 確実に再生されるよう、一度クラスを外してreflowを挟んでから付け直す。
