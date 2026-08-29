@@ -66,6 +66,9 @@ function encode_board(board, to_move, board_size):
 | `BATCH_SIZE` | 256 |
 | `LEARNING_RATE` | 1e-3（スケジュールで減衰） |
 | `L2_WEIGHT_DECAY` | 1e-4 |
+| `GAMES_PER_MATCHUP` | 4 |
+| `ELO_BASE_RATING` | 1500 |
+| `ELO_K_FACTOR` | 32 |
 
 ## MCTS（探索、疑似コード）
 
@@ -184,8 +187,26 @@ function evaluate_checkpoints(checkpoints, games_per_matchup):
   return ratings
 ```
 
-- 対局はMCTS込みで行う（生ネットワーク同士では評価がノイジーになりやすいため）。
-- 全チェックポイントのEloが求まったら、**最弱〜最強のレーティング範囲を4分位に分割し、各区分の代表チェックポイントをレベル2〜5に割り当てる**（レベル2が最弱、レベル5が最強）。
+- 対局はMCTS込みで行う（生ネットワーク同士では評価がノイジーになりやすいため）。探索には`add_noise=False`（Dirichletノイズなし）・温度0（貪欲）を使う。これは学習時の自己対戦（探索ノイズあり・温度付きサンプリング）とは異なる設定であることに注意する。
+- 全チェックポイントのEloが求まったら、**レーティングの最小値・最大値を両端とする均等4分割**でレベル2〜5の代表チェックポイントを選ぶ（レベル2が最弱=最小値側、レベル5が最強=最大値側）:
+
+  ```
+  function select_levels(ratings, num_levels=4):
+    # ratings: {checkpoint_id: elo_rating}
+    sorted_checkpoints = checkpoints sorted by rating ascending
+    min_rating, max_rating = ratings of sorted_checkpoints[0], sorted_checkpoints[-1]
+
+    selected = []
+    for i in range(num_levels):
+      target = min_rating + i / (num_levels - 1) * (max_rating - min_rating)
+      # 既に選ばれていないチェックポイントの中で target に最も近いレーティングのものを選ぶ
+      candidate = closest_by_rating(ratings, target, excluding=selected)
+      selected.append(candidate)
+
+    return selected  # レベル2, 3, 4, 5の順（selected[0]が最弱=レベル2）
+  ```
+
+  - `num_levels` 個の相異なるチェックポイントが選べない（チェックポイント総数が `num_levels` 未満）場合はエラーとする。
 - レベル1（最下級）は既存の `chooseRandomMove` を採用し、この評価プロセスには含めない。
 
 ## ブラウザ推論仕様（Phase D向けの取り決め）
