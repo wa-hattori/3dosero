@@ -17,7 +17,11 @@ const dummy = new THREE.Object3D();
  * あらかじめ用意した1つの`InstancedMesh`の表示数・座標更新のみで行う
  * （[three-js-conventions](../../.claude/rules/javascript/three-js-conventions.md)）。
  * @param {import('three').Scene} scene - 追加先のシーン
- * @returns {{ update: (moves: Array<[number, number, number]>) => void, dispose: () => void }}
+ * @returns {{
+ *   mesh: import('three').InstancedMesh,
+ *   update: (moves: Array<[number, number, number]>) => void,
+ *   dispose: () => void,
+ * }}
  */
 export const createHighlightView = (scene) => {
   const geometry = new THREE.PlaneGeometry(
@@ -58,5 +62,5 @@ export const createHighlightView = (scene) => {
     scene.remove(mesh);
   };
 
-  return { update, dispose };
+  return { mesh, update, dispose };
 };
