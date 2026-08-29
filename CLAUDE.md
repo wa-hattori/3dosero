@@ -17,6 +17,7 @@
 - ビルドステップなし。プレーンな ES Modules（`<script type="module">`）で `src/` 配下のJSファイルを直接ブラウザで読み込む構成を基本とする。バンドラは必要になるまで導入しない。
 - 3D描画フェーズに入ったら Three.js を導入する。導入後の規約は [.claude/rules/javascript/three-js-conventions.md](.claude/rules/javascript/three-js-conventions.md) に従う。
 - **ゲームロジック（盤面状態・着手判定・反転判定）と描画/DOM操作コードは必ずモジュールを分離する。** ロジック側は `three` や DOM APIに一切依存しない純粋関数群にする。理由: ロジックは自動テストで担保し、描画は差し替え可能にするため。
+- **GANベースCPU対戦相手の学習コードは `training/` 配下のPythonでオフラインに行う。** ブラウザ側の「ビルドツールなし・静的サイト」方針とは独立した領域として扱い、学習用の依存関係（PyTorch等）は `training/` 側の `pyproject.toml` でのみ管理する（ブラウザ側コードのゼロ依存方針には影響させない）。学習済みモデルを対局中にどう推論へ使うか（ブラウザ内推論 or バックエンドAPI）は別途決定する。
 
 ## JavaScript コーディング規約
 
@@ -40,6 +41,25 @@
 - **モジュール**: ES Modules (`import`/`export`) を使用し、`export default` より named export を優先する（リファクタ時の追跡性のため）。
 
 詳細と具体例は [.claude/rules/javascript/style-guide.md](.claude/rules/javascript/style-guide.md) を参照。
+
+## Python コーディング規約
+
+GANベースCPU対戦相手の学習コード（`training/` 配下）に適用する。ブラウザ側のゲーム本体とは実行環境が異なるが、規約としての厳密さは同水準を保つ。
+
+- **フォーマッタ / リンタ**: [ruff](https://docs.astral.sh/ruff/) を使用する（フォーマット・リント・importソートを1ツールに統合できるため）。
+- **型ヒント**: 公開関数・クラスの引数・返り値には型ヒントを必須とする。
+- **命名規則**:
+  - 変数・関数: `snake_case`（例: `is_valid_move`, `board_state`）
+  - クラス: `PascalCase`（例: `PolicyValueNetwork`）
+  - 定数（変更されない設定値）: `UPPER_SNAKE_CASE`（例: `CHECKPOINT_INTERVAL_STEPS`）
+  - ファイル名: `snake_case.py`（例: `board_encoding.py`）
+- **インデント**: スペース4つ（PEP 8準拠）。
+- **文字列**: ダブルクォート `"..."` を基本とする（`ruff format` のデフォルトに合わせる）。
+- **関数**: 1関数1責務を守る。学習ループ本体を除き、副作用を持たない部分（盤面エンコーディング、報酬計算、チェックポイント強さ評価など）は純粋関数として切り出し、テスト可能にする。
+- **docstring**: 公開関数・クラスにはGoogleスタイルのdocstringで引数・返り値を記述する。自明なコードへのコメントは書かない。
+- **依存管理**: リポジトリ直下の `pyproject.toml` で管理する。
+
+詳細と具体例は [.claude/rules/python/style-guide.md](.claude/rules/python/style-guide.md) を参照。
 
 ## Git コミット規約
 
@@ -67,7 +87,7 @@
 
 ## `.claude/` の使い分け
 
-- **rules/** — 常に従うべき指針。`common/` は言語非依存（Git運用・テスト方針）、`javascript/` はJS/Three.js固有の規約。作業前提として常に有効。
+- **rules/** — 常に従うべき指針。`common/` は言語非依存（Git運用・テスト方針）、`javascript/` はJS/Three.js固有の規約、`python/` はPython/学習コード固有の規約。作業前提として常に有効。
 - **skills/** — コマンドやエージェントから呼び出す再利用可能なワークフロー定義（TDDループ、アトミックコミット手順、3D反転ルールの正本、静的デプロイ手順）。
 - **agents/** — 限定的な範囲を持つタスク専門のサブエージェント（ゲームロジックレビュー、Three.js実装、コミット作成）。
 - **commands/** — スラッシュコマンド（`/commit`, `/plan-step`）。エージェントやスキルを起動するショートカット。
