@@ -71,7 +71,7 @@ const startGame = (boardSize) => {
     }
   };
 
-  createInteraction({
+  const interaction = createInteraction({
     domElement: canvas,
     camera: sceneManager.camera,
     highlightMesh: highlightView.mesh,
@@ -82,6 +82,10 @@ const startGame = (boardSize) => {
   createLayerControl(
     uiOverlay,
     (layer) => {
+      // 層を切り替えるとハイライト対象のマス構成が変わるため、切り替え前の
+      // 1タップ目の保留状態を破棄する（放置すると、別の層への切り替え後の
+      // タップが誤ってダブルタップとして結合されてしまう）。
+      interaction.cancelPendingTap();
       activeLayer = layer;
       render();
     },
