@@ -13,6 +13,8 @@ import { createStartScreen } from './ui/start-screen.js';
 import { createEndScreen } from './ui/end-screen.js';
 import { createHeroScene } from './render/hero-scene.js';
 import { createStarfield } from './render/starfield-view.js';
+import { createSpaceAudio } from './audio/space-audio.js';
+import { createMuteToggle } from './ui/mute-toggle.js';
 
 /** 対戦モードごとの対局画面スターフィールドの色調。 */
 const BATTLE_STARFIELD_COLORS = {
@@ -27,6 +29,12 @@ const uiOverlay = document.getElementById('ui-overlay');
 
 const heroScene = createHeroScene(heroCanvas);
 
+const spaceAudio = createSpaceAudio();
+createMuteToggle(uiOverlay, (muted) => spaceAudio.setMuted(muted));
+// AudioContextはユーザー操作に応答してのみ生成できるため、ページ内で最初に
+// 検出したポインタ操作をきっかけにスタート画面用BGMを開始する。
+document.addEventListener('pointerdown', () => spaceAudio.play('start'), { once: true });
+
 /**
  * 選択された対戦モード・盤面サイズで対局を開始する。3Dシーン・ゲーム状態・UIを一式構築する。
  * @param {{ battleMode: string, boardSize: number }} selection - スタート画面での選択内容
@@ -35,6 +43,7 @@ const startGame = ({ battleMode, boardSize }) => {
   // battleMode（'cpu' | 'local'）によるCPU自動着手は別コミットで配線する。
   heroScene.stop();
   heroCanvas.style.display = 'none';
+  spaceAudio.play('battle');
 
   const sceneManager = createSceneManager(canvas, boardSize);
   const cameraControls = createCameraControls(sceneManager.camera, canvas, boardSize);
