@@ -9,39 +9,9 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-EMPTY = 0
-BLACK = 1
-WHITE = 2
+from training.board_constants import BLACK, EMPTY, WHITE, index_of, opposite_color
 
-
-def opposite_color(color: int) -> int:
-    """指定した石の色の相手の色を返す。
-
-    Args:
-        color: `BLACK` または `WHITE`。
-
-    Returns:
-        相手の色（`BLACK` なら `WHITE`、`WHITE` なら `BLACK`）。
-    """
-    return WHITE if color == BLACK else BLACK
-
-
-def index_of(x: int, y: int, z: int, board_size: int) -> int:
-    """3D座標を盤面配列上のフラットなインデックスに変換する。
-
-    `src/logic/board.js` の `indexOf(x, y, z, boardSize)` と同じ規約
-    （`x + y*boardSize + z*boardSize**2`）。
-
-    Args:
-        x: x座標（0〜board_size-1）。
-        y: y座標（0〜board_size-1）。
-        z: z座標（0〜board_size-1、層）。
-        board_size: 盤面の1辺のマス数。
-
-    Returns:
-        フラット化された盤面配列上のインデックス。
-    """
-    return x + y * board_size + z * board_size**2
+__all__ = ["BLACK", "EMPTY", "WHITE", "encode_board", "index_of", "opposite_color"]
 
 
 def encode_board(board: list[int], to_move: int, board_size: int) -> torch.Tensor:
