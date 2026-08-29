@@ -111,3 +111,11 @@ export const getValidMoves = (board, color) => {
 
   return moves;
 };
+
+/**
+ * `color` に着手可能な手が1つでもあるかどうかを判定する。
+ * @param {Int8Array} board - 現在の盤面状態
+ * @param {number} color - 手番の色（`BLACK` または `WHITE`）
+ * @returns {boolean} 着手可能な手が1つ以上あれば true
+ */
+export const hasValidMove = (board, color) => getValidMoves(board, color).length > 0;

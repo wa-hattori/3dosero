@@ -7,6 +7,7 @@ import {
   isValidMove,
   applyMove,
   getValidMoves,
+  hasValidMove,
 } from './flip-rule.js';
 
 const place = (board, x, y, z, color) => {
@@ -190,4 +191,14 @@ test('getValidMoves on the initial board returns only cells that isValidMove con
   const moves = getValidMoves(board, BLACK);
   assert.ok(moves.length > 0);
   assert.ok(moves.every(([x, y, z]) => isValidMove(board, x, y, z, BLACK)));
+});
+
+test('hasValidMove is true when at least one legal move exists', () => {
+  const board = place(place(createEmptyBoard(), 1, 0, 0, WHITE), 2, 0, 0, BLACK);
+  assert.equal(hasValidMove(board, BLACK), true);
+});
+
+test('hasValidMove is false when no legal move exists', () => {
+  const board = createEmptyBoard();
+  assert.equal(hasValidMove(board, BLACK), false);
 });
