@@ -42,6 +42,21 @@
       font-size: 1rem;
     }
 
+    .status-panel--pass-flash {
+      animation: pass-flash 900ms ease-out;
+    }
+
+    @keyframes pass-flash {
+      0% {
+        background: rgba(255, 196, 0, 0.85);
+        transform: scale(1.08);
+      }
+      100% {
+        background: rgba(0, 0, 0, 0.5);
+        transform: scale(1);
+      }
+    }
+
     .layer-control {
       position: absolute;
       bottom: 24px;
