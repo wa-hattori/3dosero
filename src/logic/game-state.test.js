@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BLACK, WHITE, createEmptyBoard, createInitialBoard, indexOf } from './board.js';
+import { BLACK, WHITE, EMPTY, createEmptyBoard, createInitialBoard, indexOf } from './board.js';
 import { countStones, getWinner, isGameOver, getNextTurn } from './game-state.js';
 
 test('countStones returns zero for both colors on an empty board', () => {
@@ -54,6 +54,15 @@ test('isGameOver is true when neither color has an empty cell to move into', () 
   assert.equal(isGameOver(board), true);
 });
 
+test('isGameOver is true when a stalemate leaves an empty cell that neither color can capture into', () => {
+  const board = createEmptyBoard().fill(BLACK);
+  // 唯一の空きマス(7,7,7)はBLACKに囲まれているが、盤上にWHITEが1つも無いため
+  // どちらの色も反転条件（相手石の並びの先が自分の石）を満たせない。
+  // 盤面が「満杯」でなくてもゲームが終了しうることを確認する。
+  board[indexOf(7, 7, 7)] = EMPTY;
+  assert.equal(isGameOver(board), true);
+});
+
 test('getNextTurn passes to the opponent when they have a valid move', () => {
   const board = createInitialBoard();
   assert.equal(getNextTurn(board, BLACK), WHITE);
@@ -69,5 +78,11 @@ test('getNextTurn skips back to the same color when the opponent must pass', () 
 
 test('getNextTurn returns null when neither color can move', () => {
   const board = createEmptyBoard().fill(BLACK);
+  assert.equal(getNextTurn(board, BLACK), null);
+});
+
+test('getNextTurn returns null on a stalemate that still has an empty cell', () => {
+  const board = createEmptyBoard().fill(BLACK);
+  board[indexOf(7, 7, 7)] = EMPTY;
   assert.equal(getNextTurn(board, BLACK), null);
 });
