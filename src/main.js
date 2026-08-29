@@ -42,11 +42,6 @@ createMuteToggle(uiOverlay, (muted) => {
   bgmPlayer.setMuted(muted);
   setClickSoundMuted(muted);
 });
-// <audio>.play()もブラウザの自動再生ポリシーの対象。pointerdown/mousedownは
-// 環境によって「ユーザー操作」と確実に認識されるとは限らないため、click
-// （マウス・タッチいずれでも標準的に認識される）を最初に検出したタイミングで
-// スタート画面用BGMを開始する。
-document.addEventListener('click', () => bgmPlayer.play('start'), { once: true });
 
 /**
  * 選択された対戦モード・盤面サイズで対局を開始する。3Dシーン・ゲーム状態・UIを一式構築する。
@@ -167,4 +162,4 @@ const startGame = ({ battleMode, boardSize }) => {
   });
 };
 
-createStartScreen(uiOverlay, startGame);
+createStartScreen(uiOverlay, startGame, () => bgmPlayer.play('start'));
