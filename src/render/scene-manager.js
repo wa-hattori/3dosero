@@ -18,7 +18,7 @@ const BACKGROUND_COLOR = 0x111318;
  *   scene: THREE.Scene,
  *   camera: THREE.PerspectiveCamera,
  *   renderer: THREE.WebGLRenderer,
- *   start: (onFrame?: () => void) => void,
+ *   start: (onFrame?: (deltaSeconds: number) => void) => void,
  *   stop: () => void,
  * }}
  */
@@ -53,10 +53,14 @@ export const createSceneManager = (canvas, boardSize = BOARD_SIZE) => {
   window.addEventListener('resize', handleResize);
 
   let animationFrameId = null;
+  let lastFrameTime = null;
 
   const start = (onFrame) => {
-    const renderLoop = () => {
-      onFrame?.();
+    const renderLoop = (now) => {
+      const deltaSeconds = lastFrameTime === null ? 0 : (now - lastFrameTime) / 1000;
+      lastFrameTime = now;
+
+      onFrame?.(deltaSeconds);
       renderer.render(scene, camera);
       animationFrameId = requestAnimationFrame(renderLoop);
     };
