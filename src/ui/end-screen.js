@@ -1,4 +1,5 @@
 import { BLACK, WHITE } from '../logic/board.js';
+import { playClickSound } from '../audio/click-sound.js';
 
 const COLOR_LABELS = { [BLACK]: '黒', [WHITE]: '白' };
 
@@ -25,7 +26,10 @@ export const createEndScreen = (container, { winner, counts }) => {
   const button = document.createElement('button');
   button.type = 'button';
   button.textContent = 'タイトルに戻る';
-  button.addEventListener('click', () => window.location.reload());
+  button.addEventListener('click', () => {
+    playClickSound();
+    window.location.reload();
+  });
   overlay.appendChild(button);
 
   container.appendChild(overlay);

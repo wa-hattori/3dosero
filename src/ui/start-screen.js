@@ -1,4 +1,5 @@
 import { SUPPORTED_BOARD_SIZES } from '../logic/board.js';
+import { playClickSound } from '../audio/click-sound.js';
 
 const BATTLE_MODES = [
   { id: 'cpu', label: 'CPU対戦' },
@@ -55,6 +56,7 @@ export const createStartScreen = (container, onStart) => {
       button.type = 'button';
       button.textContent = `${boardSize}×${boardSize}×${boardSize}`;
       button.addEventListener('click', () => {
+        playClickSound();
         dispose();
         onStart({ battleMode: selectedBattleMode, boardSize });
       });
@@ -73,6 +75,7 @@ export const createStartScreen = (container, onStart) => {
       button.textContent = mode.disabled ? `${mode.label}（近日公開）` : mode.label;
       button.disabled = Boolean(mode.disabled);
       button.addEventListener('click', () => {
+        playClickSound();
         selectedBattleMode = mode.id;
         showBoardSizeStep();
       });
@@ -81,6 +84,7 @@ export const createStartScreen = (container, onStart) => {
   };
 
   backButton.addEventListener('click', () => {
+    playClickSound();
     selectedBattleMode = null;
     showBattleModeStep();
   });

@@ -14,7 +14,8 @@ import { createStartScreen } from './ui/start-screen.js';
 import { createEndScreen } from './ui/end-screen.js';
 import { createHeroScene } from './render/hero-scene.js';
 import { createStarfield } from './render/starfield-view.js';
-import { createSpaceAudio } from './audio/space-audio.js';
+import { createBgmPlayer } from './audio/bgm-player.js';
+import { setClickSoundMuted } from './audio/click-sound.js';
 import { createMuteToggle } from './ui/mute-toggle.js';
 import { createTitleButton } from './ui/title-button.js';
 
@@ -36,13 +37,16 @@ const uiOverlay = document.getElementById('ui-overlay');
 
 const heroScene = createHeroScene(heroCanvas);
 
-const spaceAudio = createSpaceAudio();
-createMuteToggle(uiOverlay, (muted) => spaceAudio.setMuted(muted));
-// AudioContextはユーザー操作に応答してのみ生成できる。ブラウザの自動再生ポリシーが
-// 確実に「ユーザー操作」と認識するのは click（pointerdown/mousedownは環境によって
-// 認識されないことがある）のため、ページ内で最初に検出したclickをきっかけに
+const bgmPlayer = createBgmPlayer();
+createMuteToggle(uiOverlay, (muted) => {
+  bgmPlayer.setMuted(muted);
+  setClickSoundMuted(muted);
+});
+// <audio>.play()もブラウザの自動再生ポリシーの対象。pointerdown/mousedownは
+// 環境によって「ユーザー操作」と確実に認識されるとは限らないため、click
+// （マウス・タッチいずれでも標準的に認識される）を最初に検出したタイミングで
 // スタート画面用BGMを開始する。
-document.addEventListener('click', () => spaceAudio.play('start'), { once: true });
+document.addEventListener('click', () => bgmPlayer.play('start'), { once: true });
 
 /**
  * 選択された対戦モード・盤面サイズで対局を開始する。3Dシーン・ゲーム状態・UIを一式構築する。
@@ -51,7 +55,7 @@ document.addEventListener('click', () => spaceAudio.play('start'), { once: true 
 const startGame = ({ battleMode, boardSize }) => {
   heroScene.stop();
   heroCanvas.style.display = 'none';
-  spaceAudio.play('battle');
+  bgmPlayer.play('battle');
 
   const sceneManager = createSceneManager(canvas, boardSize);
   const cameraControls = createCameraControls(sceneManager.camera, canvas, boardSize);
