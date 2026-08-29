@@ -16,10 +16,11 @@ const canvas = document.getElementById('board-canvas');
 const uiOverlay = document.getElementById('ui-overlay');
 
 /**
- * 選択された盤面サイズで対局を開始する。3Dシーン・ゲーム状態・UIを一式構築する。
- * @param {number} boardSize - 盤面サイズ（`SUPPORTED_BOARD_SIZES` のいずれか）
+ * 選択された対戦モード・盤面サイズで対局を開始する。3Dシーン・ゲーム状態・UIを一式構築する。
+ * @param {{ battleMode: string, boardSize: number }} selection - スタート画面での選択内容
  */
-const startGame = (boardSize) => {
+const startGame = ({ battleMode, boardSize }) => {
+  // battleMode（'cpu' | 'local'）によるCPU自動着手は別コミットで配線する。
   const sceneManager = createSceneManager(canvas, boardSize);
   const cameraControls = createCameraControls(sceneManager.camera, canvas, boardSize);
   const boardView = createBoardView(sceneManager.scene, boardSize);
