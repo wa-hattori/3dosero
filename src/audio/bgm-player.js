@@ -54,7 +54,7 @@ export const createBgmPlayer = () => {
     clearFade();
     audio.src = TRACKS[trackName];
     audio.currentTime = 0;
-    audio.volume = muted ? 0 : 0;
+    audio.volume = 0;
     audio.play().catch(() => {});
     if (!muted) fadeInToFull();
   };
