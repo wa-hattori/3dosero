@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { BLACK, WHITE, createEmptyBoard, createInitialBoard, indexOf } from './board.js';
-import { countStones, getWinner, isGameOver } from './game-state.js';
+import { countStones, getWinner, isGameOver, getNextTurn } from './game-state.js';
 
 test('countStones returns zero for both colors on an empty board', () => {
   const board = createEmptyBoard();
@@ -52,4 +52,22 @@ test('isGameOver is false when only one color can still move', () => {
 test('isGameOver is true when neither color has an empty cell to move into', () => {
   const board = createEmptyBoard().fill(BLACK);
   assert.equal(isGameOver(board), true);
+});
+
+test('getNextTurn passes to the opponent when they have a valid move', () => {
+  const board = createInitialBoard();
+  assert.equal(getNextTurn(board, BLACK), WHITE);
+});
+
+test('getNextTurn skips back to the same color when the opponent must pass', () => {
+  const board = createEmptyBoard();
+  board[indexOf(0, 0, 0)] = WHITE;
+  board[indexOf(1, 0, 0)] = BLACK;
+  // BLACKには着手可能な手がなく（盤外にしか置けない）、WHITEには(2,0,0)への手がある。
+  assert.equal(getNextTurn(board, WHITE), WHITE);
+});
+
+test('getNextTurn returns null when neither color can move', () => {
+  const board = createEmptyBoard().fill(BLACK);
+  assert.equal(getNextTurn(board, BLACK), null);
 });

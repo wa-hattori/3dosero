@@ -35,3 +35,20 @@ export const getWinner = (board) => {
  * @returns {boolean} ゲームが終了していれば true
  */
 export const isGameOver = (board) => !hasValidMove(board, BLACK) && !hasValidMove(board, WHITE);
+
+const opposite = (color) => (color === BLACK ? WHITE : BLACK);
+
+/**
+ * 直前に `justMovedColor` が着手した後の、次の手番を返す。
+ * 相手に着手可能な手があれば相手番、なければ（相手がパス）自分に着手可能な手が
+ * あれば自分番、どちらも着手できなければゲーム終了として `null` を返す。
+ * @param {Int8Array} board - 現在の盤面状態
+ * @param {number} justMovedColor - 直前に着手した色（`BLACK` または `WHITE`）
+ * @returns {number | null} 次の手番の色。ゲーム終了の場合は `null`
+ */
+export const getNextTurn = (board, justMovedColor) => {
+  const opponent = opposite(justMovedColor);
+  if (hasValidMove(board, opponent)) return opponent;
+  if (hasValidMove(board, justMovedColor)) return justMovedColor;
+  return null;
+};
