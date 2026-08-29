@@ -69,6 +69,14 @@ export const createStoneView = (scene) => {
     whiteMesh.count = whiteCount;
     blackMesh.instanceMatrix.needsUpdate = true;
     whiteMesh.instanceMatrix.needsUpdate = true;
+    // InstancedMeshのboundingSphereは一度計算されるとキャッシュされ、setMatrixAt/countの
+    // 変更だけでは自動更新されない。nullに戻し、次回のフラスタムカリング/レイキャスト時に
+    // 現在のインスタンス配置で再計算させる（さもないと初期配置基準の古い範囲のまま固定され、
+    // 盤面端に置かれた石が描画カリングで消えるおそれがある）。
+    blackMesh.boundingSphere = null;
+    whiteMesh.boundingSphere = null;
+    blackMesh.boundingBox = null;
+    whiteMesh.boundingBox = null;
   };
 
   const dispose = () => {

@@ -54,6 +54,13 @@ export const createHighlightView = (scene) => {
 
     mesh.count = moves.length;
     mesh.instanceMatrix.needsUpdate = true;
+    // InstancedMeshのboundingSphereはキャッシュされ、setMatrixAt/countの変更だけでは
+    // 自動更新されない。nullに戻して次回のレイキャスト/フラスタムカリング時に現在の
+    // ハイライト配置で再計算させる。放置すると、最初にキャッシュされた（盤面中央寄りの）
+    // 古い範囲のままになり、盤面端・角の着手可能マスをクリックしても
+    // raycaster.ray.intersectsSphere() が false を返し、クリックが反応しなくなる。
+    mesh.boundingSphere = null;
+    mesh.boundingBox = null;
   };
 
   const dispose = () => {
