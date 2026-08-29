@@ -12,6 +12,14 @@ import { createLayerControl } from './ui/layer-control.js';
 import { createStartScreen } from './ui/start-screen.js';
 import { createEndScreen } from './ui/end-screen.js';
 import { createHeroScene } from './render/hero-scene.js';
+import { createStarfield } from './render/starfield-view.js';
+
+/** 対戦モードごとの対局画面スターフィールドの色調。 */
+const BATTLE_STARFIELD_COLORS = {
+  cpu: 0xffffff,
+  local: 0xffffff,
+  online: 0xff5555,
+};
 
 const canvas = document.getElementById('board-canvas');
 const heroCanvas = document.getElementById('hero-canvas');
@@ -34,6 +42,10 @@ const startGame = ({ battleMode, boardSize }) => {
   const stoneView = createStoneView(sceneManager.scene, boardSize);
   const highlightView = createHighlightView(sceneManager.scene, boardSize);
   const statusPanel = createStatusPanel(uiOverlay);
+  const battleStarfield = createStarfield(sceneManager.scene, {
+    mode: 'warp',
+    color: BATTLE_STARFIELD_COLORS[battleMode] ?? BATTLE_STARFIELD_COLORS.local,
+  });
 
   let board = createInitialBoard(boardSize);
   let currentTurn = BLACK;
@@ -100,7 +112,10 @@ const startGame = ({ battleMode, boardSize }) => {
     boardSize,
   );
 
-  sceneManager.start(() => cameraControls.update());
+  sceneManager.start((deltaSeconds) => {
+    cameraControls.update();
+    battleStarfield.update(deltaSeconds);
+  });
 };
 
 createStartScreen(uiOverlay, startGame);

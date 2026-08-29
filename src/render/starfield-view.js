@@ -3,10 +3,16 @@ import * as THREE from 'three';
 const DEFAULT_STAR_COUNT = 2500;
 /** 星をランダムに配置・再配置する球の半径。 */
 const FIELD_RADIUS = 60;
+/**
+ * warpモードで星が取りうる最小距離。カメラ・盤面のすぐ近くまで星が来ると
+ * 遠近感で極端に巨大な点になり盤面が見えなくなるため、常にこの距離より
+ * 外側にとどめる（背景として盤面を邪魔しないようにする）。
+ */
+const WARP_MIN_RADIUS = 24;
 /** ambientモードでの自転速度（ラジアン/秒、係数）。 */
 const AMBIENT_ROTATION_SPEED = 0.03;
 /** warpモードで星が中心から遠ざかる速度（ワールド単位/秒）。 */
-const WARP_EXPANSION_SPEED = 22;
+const WARP_EXPANSION_SPEED = 14;
 
 /**
  * 汎用スターフィールドを生成する。
@@ -54,7 +60,7 @@ export const createStarfield = (scene, options = {}) => {
 
   for (let i = 0; i < count; i++) {
     const initialRadius = mode === 'warp'
-      ? Math.random() * FIELD_RADIUS
+      ? WARP_MIN_RADIUS + Math.random() * (FIELD_RADIUS - WARP_MIN_RADIUS)
       : FIELD_RADIUS * (0.3 + Math.random() * 0.7);
     placeStar(i, initialRadius);
   }
@@ -65,10 +71,10 @@ export const createStarfield = (scene, options = {}) => {
 
   const material = new THREE.PointsMaterial({
     color,
-    size: mode === 'warp' ? 0.6 : 0.3,
+    size: mode === 'warp' ? 0.18 : 0.3,
     sizeAttenuation: true,
     transparent: true,
-    opacity: 0.9,
+    opacity: mode === 'warp' ? 0.75 : 0.9,
   });
 
   const points = new THREE.Points(geometry, material);
@@ -87,7 +93,7 @@ export const createStarfield = (scene, options = {}) => {
 
     for (let i = 0; i < count; i++) {
       radii[i] += deltaSeconds * WARP_EXPANSION_SPEED * speed;
-      if (radii[i] > FIELD_RADIUS) radii[i] = 0;
+      if (radii[i] > FIELD_RADIUS) radii[i] = WARP_MIN_RADIUS;
 
       const i3 = i * 3;
       positions[i3] = directions[i3] * radii[i];
