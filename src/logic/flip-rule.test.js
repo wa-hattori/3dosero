@@ -1,7 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EMPTY, BLACK, WHITE, createEmptyBoard, indexOf } from './board.js';
-import { DIRECTIONS_3D, getFlippableStones, isValidMove, applyMove } from './flip-rule.js';
+import { EMPTY, BLACK, WHITE, createEmptyBoard, createInitialBoard, indexOf } from './board.js';
+import {
+  DIRECTIONS_3D,
+  getFlippableStones,
+  isValidMove,
+  applyMove,
+  getValidMoves,
+} from './flip-rule.js';
 
 const place = (board, x, y, z, color) => {
   board[indexOf(x, y, z)] = color;
@@ -135,4 +141,21 @@ test('applyMove returns null for an invalid move and leaves the board untouched'
   const next = applyMove(board, 0, 0, 0, BLACK);
   assert.equal(next, null);
   assert.equal(board[indexOf(0, 0, 0)], EMPTY);
+});
+
+test('getValidMoves finds no moves on an empty board', () => {
+  const board = createEmptyBoard();
+  assert.deepEqual(getValidMoves(board, BLACK), []);
+});
+
+test('getValidMoves finds the unique valid move on a simple board', () => {
+  const board = place(place(createEmptyBoard(), 1, 0, 0, WHITE), 2, 0, 0, BLACK);
+  assert.deepEqual(sortStones(getValidMoves(board, BLACK)), sortStones([[0, 0, 0]]));
+});
+
+test('getValidMoves on the initial board returns only cells that isValidMove confirms', () => {
+  const board = createInitialBoard();
+  const moves = getValidMoves(board, BLACK);
+  assert.ok(moves.length > 0);
+  assert.ok(moves.every(([x, y, z]) => isValidMove(board, x, y, z, BLACK)));
 });

@@ -1,4 +1,4 @@
-import { EMPTY, BLACK, WHITE, isOnBoard, indexOf } from './board.js';
+import { BOARD_SIZE, EMPTY, BLACK, WHITE, isOnBoard, indexOf } from './board.js';
 
 /**
  * 26方向の探索ベクトル。`(0,0,0)` を除く `dx, dy, dz ∈ {-1, 0, 1}` の全組み合わせ。
@@ -87,4 +87,26 @@ export const applyMove = (board, x0, y0, z0, color) => {
   }
 
   return next;
+};
+
+/**
+ * `color` が着手可能な座標をすべて列挙する。
+ * @param {Int8Array} board - 現在の盤面状態
+ * @param {number} color - 手番の色（`BLACK` または `WHITE`）
+ * @returns {Array<[number, number, number]>} 着手可能な座標一覧
+ */
+export const getValidMoves = (board, color) => {
+  const moves = [];
+
+  for (let z = 0; z < BOARD_SIZE; z++) {
+    for (let y = 0; y < BOARD_SIZE; y++) {
+      for (let x = 0; x < BOARD_SIZE; x++) {
+        if (isValidMove(board, x, y, z, color)) {
+          moves.push([x, y, z]);
+        }
+      }
+    }
+  }
+
+  return moves;
 };
