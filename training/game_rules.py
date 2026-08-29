@@ -46,6 +46,22 @@ def index_of(x: int, y: int, z: int, board_size: int) -> int:
     return x + y * board_size + z * board_size**2
 
 
+def coords_from_index(index: int, board_size: int) -> tuple[int, int, int]:
+    """`index_of` の逆変換。フラットなインデックスを3D座標に変換する。
+
+    Args:
+        index: `index_of(x, y, z, board_size)` で得られるインデックス。
+        board_size: 盤面の1辺のマス数。
+
+    Returns:
+        `(x, y, z)` 座標のタプル。
+    """
+    x = index % board_size
+    y = (index // board_size) % board_size
+    z = index // (board_size**2)
+    return x, y, z
+
+
 def is_on_board(x: int, y: int, z: int, board_size: int) -> bool:
     """座標が盤面の範囲内かどうかを判定する。
 

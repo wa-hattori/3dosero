@@ -11,6 +11,7 @@ from training.game_rules import (
     EMPTY,
     WHITE,
     apply_move,
+    coords_from_index,
     count_stones,
     create_empty_board,
     create_initial_board,
@@ -49,6 +50,18 @@ def test_opposite_color_returns_black_for_white() -> None:
 
 def test_index_of_maps_origin_to_zero() -> None:
     assert index_of(0, 0, 0, 8) == 0
+
+
+def test_coords_from_index_round_trips_with_index_of() -> None:
+    board_size = 8
+    for x, y, z in [(0, 0, 0), (7, 7, 7), (3, 5, 2), (1, 0, 6)]:
+        index = index_of(x, y, z, board_size)
+        assert coords_from_index(index, board_size) == (x, y, z)
+
+
+def test_coords_from_index_respects_smaller_board_size() -> None:
+    board_size = 4
+    assert coords_from_index(index_of(1, 2, 3, board_size), board_size) == (1, 2, 3)
 
 
 def test_is_on_board_true_for_min_and_max_corner() -> None:
