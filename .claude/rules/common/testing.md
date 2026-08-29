@@ -21,7 +21,7 @@ description: ゲームロジックのユニットテスト方針（言語非依�
 - 1テストケースで1つの振る舞いのみを検証する。
 - テスト名は「何をしたら何が起きるか」が読めるようにする（例: `flips opponent stones in a straight vertical line`）。
 - 境界値（盤面の端、層の最上/最下、石が1つも挟めないケース）を必ずカバーする。3D反転ルールの正本は [othello-3d-flip-rule](../../skills/othello-3d-flip-rule/SKILL.md)。
-- テストランナー・アサーションライブラリは、ゲームロジック実装に着手する際に選定し本ドキュメントを更新する（現時点では未導入）。
+- テストランナー・アサーションライブラリは Node.js 組み込みの `node --test` + `node:assert/strict` を採用する（追加のnpm依存やビルド設定が不要で、ビルドツールなし方針と一貫するため）。`npm test` で `src/` 配下の `*.test.js` を実行する。
 
 ## TDDループ
 
