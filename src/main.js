@@ -1,6 +1,6 @@
 import { createInitialBoard, BLACK, oppositeColor } from './logic/board.js';
 import { getValidMoves, applyMove } from './logic/flip-rule.js';
-import { getNextTurn, getWinner } from './logic/game-state.js';
+import { getNextTurn, getWinner, countStones } from './logic/game-state.js';
 import { createSceneManager } from './render/scene-manager.js';
 import { createCameraControls } from './render/camera-controls.js';
 import { createBoardView } from './render/board-view.js';
@@ -10,6 +10,7 @@ import { createInteraction } from './ui/interaction.js';
 import { createStatusPanel } from './ui/status-panel.js';
 import { createLayerControl } from './ui/layer-control.js';
 import { createStartScreen } from './ui/start-screen.js';
+import { createEndScreen } from './ui/end-screen.js';
 
 const canvas = document.getElementById('board-canvas');
 const uiOverlay = document.getElementById('ui-overlay');
@@ -64,18 +65,27 @@ const startGame = (boardSize) => {
     validMoves = isOver ? [] : getValidMoves(board, currentTurn, boardSize);
 
     render(passedColor);
+
+    if (isOver) {
+      createEndScreen(uiOverlay, { winner, counts: countStones(board) });
+    }
   };
 
-  createInteraction({
+  const interaction = createInteraction({
     domElement: canvas,
     camera: sceneManager.camera,
     highlightMesh: highlightView.mesh,
     onSelect: handleMoveSelected,
+    onPendingChange: (instanceIndex) => highlightView.setEmphasized(instanceIndex),
   });
 
   createLayerControl(
     uiOverlay,
     (layer) => {
+      // 層を切り替えるとハイライト対象のマス構成が変わるため、切り替え前の
+      // 1タップ目の保留状態を破棄する（放置すると、別の層への切り替え後の
+      // タップが誤ってダブルタップとして結合されてしまう）。
+      interaction.cancelPendingTap();
       activeLayer = layer;
       render();
     },
