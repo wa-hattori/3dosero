@@ -1,4 +1,5 @@
 import { BLACK, WHITE } from './board.js';
+import { hasValidMove } from './flip-rule.js';
 
 /**
  * 盤面上の各色の石数を数える。
@@ -26,3 +27,11 @@ export const getWinner = (board) => {
   if (counts[WHITE] > counts[BLACK]) return WHITE;
   return null;
 };
+
+/**
+ * ゲームが終了しているかどうかを判定する。
+ * 両者とも着手可能な手が1つもなければ終了（盤面が満杯の場合も、この条件で自動的に含まれる）。
+ * @param {Int8Array} board - 現在の盤面状態
+ * @returns {boolean} ゲームが終了していれば true
+ */
+export const isGameOver = (board) => !hasValidMove(board, BLACK) && !hasValidMove(board, WHITE);
