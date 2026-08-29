@@ -1,6 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BOARD_SIZE, EMPTY, BLACK, WHITE, indexOf, isOnBoard, createEmptyBoard } from './board.js';
+import {
+  BOARD_SIZE,
+  EMPTY,
+  BLACK,
+  WHITE,
+  indexOf,
+  isOnBoard,
+  createEmptyBoard,
+  createInitialBoard,
+} from './board.js';
 
 test('BOARD_SIZE is 8', () => {
   assert.equal(BOARD_SIZE, 8);
@@ -74,4 +83,45 @@ test('createEmptyBoard fills every cell with EMPTY', () => {
 
 test('createEmptyBoard returns a new board instance on each call', () => {
   assert.notEqual(createEmptyBoard(), createEmptyBoard());
+});
+
+test('createInitialBoard places exactly 4 black and 4 white stones', () => {
+  const board = createInitialBoard();
+  const counts = board.reduce(
+    (acc, cell) => ({ ...acc, [cell]: (acc[cell] ?? 0) + 1 }),
+    {},
+  );
+  assert.equal(counts[BLACK], 4);
+  assert.equal(counts[WHITE], 4);
+  assert.equal(counts[EMPTY], BOARD_SIZE * BOARD_SIZE * BOARD_SIZE - 8);
+});
+
+test('createInitialBoard places stones only in the center 2x2x2 cube', () => {
+  const board = createInitialBoard();
+  for (let z = 0; z < BOARD_SIZE; z++) {
+    for (let y = 0; y < BOARD_SIZE; y++) {
+      for (let x = 0; x < BOARD_SIZE; x++) {
+        const isCenter = (x === 3 || x === 4) && (y === 3 || y === 4) && (z === 3 || z === 4);
+        if (isCenter) continue;
+        assert.equal(board[indexOf(x, y, z)], EMPTY, `(${x},${y},${z}) should be empty`);
+      }
+    }
+  }
+});
+
+test('createInitialBoard colors each center cell by (x+y+z) parity', () => {
+  const board = createInitialBoard();
+  const cases = [
+    [3, 3, 3, BLACK],
+    [3, 3, 4, WHITE],
+    [3, 4, 3, WHITE],
+    [3, 4, 4, BLACK],
+    [4, 3, 3, WHITE],
+    [4, 3, 4, BLACK],
+    [4, 4, 3, BLACK],
+    [4, 4, 4, WHITE],
+  ];
+  for (const [x, y, z, expected] of cases) {
+    assert.equal(board[indexOf(x, y, z)], expected, `(${x},${y},${z})`);
+  }
 });
