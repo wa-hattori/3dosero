@@ -1,6 +1,6 @@
 import { createInitialBoard, BLACK, oppositeColor } from './logic/board.js';
 import { getValidMoves, applyMove } from './logic/flip-rule.js';
-import { getNextTurn, getWinner } from './logic/game-state.js';
+import { getNextTurn, getWinner, countStones } from './logic/game-state.js';
 import { createSceneManager } from './render/scene-manager.js';
 import { createCameraControls } from './render/camera-controls.js';
 import { createBoardView } from './render/board-view.js';
@@ -10,6 +10,7 @@ import { createInteraction } from './ui/interaction.js';
 import { createStatusPanel } from './ui/status-panel.js';
 import { createLayerControl } from './ui/layer-control.js';
 import { createStartScreen } from './ui/start-screen.js';
+import { createEndScreen } from './ui/end-screen.js';
 
 const canvas = document.getElementById('board-canvas');
 const uiOverlay = document.getElementById('ui-overlay');
@@ -64,6 +65,10 @@ const startGame = (boardSize) => {
     validMoves = isOver ? [] : getValidMoves(board, currentTurn, boardSize);
 
     render(passedColor);
+
+    if (isOver) {
+      createEndScreen(uiOverlay, { winner, counts: countStones(board) });
+    }
   };
 
   createInteraction({
