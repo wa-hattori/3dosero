@@ -16,6 +16,7 @@ import { createHeroScene } from './render/hero-scene.js';
 import { createStarfield } from './render/starfield-view.js';
 import { createSpaceAudio } from './audio/space-audio.js';
 import { createMuteToggle } from './ui/mute-toggle.js';
+import { createTitleButton } from './ui/title-button.js';
 
 /** 対戦モードごとの対局画面スターフィールドの色調。 */
 const BATTLE_STARFIELD_COLORS = {
@@ -58,6 +59,7 @@ const startGame = ({ battleMode, boardSize }) => {
   const stoneView = createStoneView(sceneManager.scene, boardSize);
   const highlightView = createHighlightView(sceneManager.scene, boardSize);
   const statusPanel = createStatusPanel(uiOverlay);
+  createTitleButton(uiOverlay);
   const battleStarfield = createStarfield(sceneManager.scene, {
     mode: 'warp',
     color: BATTLE_STARFIELD_COLORS[battleMode] ?? BATTLE_STARFIELD_COLORS.local,
