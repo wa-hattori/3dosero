@@ -11,9 +11,13 @@ import { createStatusPanel } from './ui/status-panel.js';
 import { createLayerControl } from './ui/layer-control.js';
 import { createStartScreen } from './ui/start-screen.js';
 import { createEndScreen } from './ui/end-screen.js';
+import { createHeroScene } from './render/hero-scene.js';
 
 const canvas = document.getElementById('board-canvas');
+const heroCanvas = document.getElementById('hero-canvas');
 const uiOverlay = document.getElementById('ui-overlay');
+
+const heroScene = createHeroScene(heroCanvas);
 
 /**
  * 選択された対戦モード・盤面サイズで対局を開始する。3Dシーン・ゲーム状態・UIを一式構築する。
@@ -21,6 +25,9 @@ const uiOverlay = document.getElementById('ui-overlay');
  */
 const startGame = ({ battleMode, boardSize }) => {
   // battleMode（'cpu' | 'local'）によるCPU自動着手は別コミットで配線する。
+  heroScene.stop();
+  heroCanvas.style.display = 'none';
+
   const sceneManager = createSceneManager(canvas, boardSize);
   const cameraControls = createCameraControls(sceneManager.camera, canvas, boardSize);
   const boardView = createBoardView(sceneManager.scene, boardSize);
