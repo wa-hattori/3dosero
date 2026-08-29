@@ -53,3 +53,15 @@ export const getFlippableStones = (board, x0, y0, z0, color) => {
 
   return flippable;
 };
+
+/**
+ * 指定した座標に `color` の石を置けるかどうかを判定する。
+ * @param {Int8Array} board - 現在の盤面状態
+ * @param {number} x0 - 判定するx座標
+ * @param {number} y0 - 判定するy座標
+ * @param {number} z0 - 判定するz座標
+ * @param {number} color - 置く石の色（`BLACK` または `WHITE`）
+ * @returns {boolean} 1マス以上反転できる、着手可能な手であれば true
+ */
+export const isValidMove = (board, x0, y0, z0, color) =>
+  getFlippableStones(board, x0, y0, z0, color).length > 0;

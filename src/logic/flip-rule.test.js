@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { BLACK, WHITE, createEmptyBoard, indexOf } from './board.js';
-import { DIRECTIONS_3D, getFlippableStones } from './flip-rule.js';
+import { DIRECTIONS_3D, getFlippableStones, isValidMove } from './flip-rule.js';
 
 const place = (board, x, y, z, color) => {
   board[indexOf(x, y, z)] = color;
@@ -103,4 +103,14 @@ test('flips a full corner-to-corner space diagonal run', () => {
 
   const flippable = getFlippableStones(board, 0, 0, 0, BLACK);
   assert.deepEqual(sortStones(flippable), sortStones(opponentRun));
+});
+
+test('isValidMove is true when the move would flip at least one stone', () => {
+  const board = place(place(createEmptyBoard(), 1, 0, 0, WHITE), 2, 0, 0, BLACK);
+  assert.equal(isValidMove(board, 0, 0, 0, BLACK), true);
+});
+
+test('isValidMove is false when the move would flip no stones', () => {
+  const board = createEmptyBoard();
+  assert.equal(isValidMove(board, 0, 0, 0, BLACK), false);
 });
