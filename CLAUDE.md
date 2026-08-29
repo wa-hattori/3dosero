@@ -10,14 +10,15 @@
 - **反転ルール**: 石を置いた位置から3次元の26方向（`dx,dy,dz ∈ {-1,0,1}` の組み合わせのうち `(0,0,0)` を除く全て＝同一平面8方向・上下1方向・立体斜め17方向）を走査し、相手石が連続したのち自分の石で終端していれば、その区間をすべて自分の色に反転する。詳細なアルゴリズムの正本は [othello-3d-flip-rule](.claude/skills/othello-3d-flip-rule/SKILL.md)。
 - **GUI**: 盤面は緑地に黒線のマス目、着手可能マスは灰色でハイライト。視点操作は全体回転・拡大縮小（VESTA的な3D結晶構造ビューアのイメージ）に加え、層ごとに絞り込んで見るオプションを持つ。
 - **配信**: まずはビルドツールなしの素の HTML/CSS/JS で実装し、HTTPS で静的サイトとして公開する。将来的には App Store でのネイティブ配信も視野に入れる。
-- **将来構想**: GAN（敵対的生成ネットワーク）ベースの CPU 対戦相手。
+- **CPU対戦相手**: 自己対戦強化学習（AlphaZero風。「GAN」は文字通りのGenerator/Discriminatorではなく自己対戦を指す）で学習したモデルを、ブラウザ内推論（`onnxruntime-web`、CDN経由・サーバー不要）で使う。レベル1は簡易なランダムCPU、レベル2〜5は学習済みチェックポイントを自己対戦Eloで評価して選定した4段階。学習アルゴリズムの正本は [gan-cpu-self-play](.claude/skills/gan-cpu-self-play/SKILL.md)。
 
 ## 現時点のアーキテクチャ方針
 
 - ビルドステップなし。プレーンな ES Modules（`<script type="module">`）で `src/` 配下のJSファイルを直接ブラウザで読み込む構成を基本とする。バンドラは必要になるまで導入しない。
 - 3D描画フェーズに入ったら Three.js を導入する。導入後の規約は [.claude/rules/javascript/three-js-conventions.md](.claude/rules/javascript/three-js-conventions.md) に従う。
 - **ゲームロジック（盤面状態・着手判定・反転判定）と描画/DOM操作コードは必ずモジュールを分離する。** ロジック側は `three` や DOM APIに一切依存しない純粋関数群にする。理由: ロジックは自動テストで担保し、描画は差し替え可能にするため。
-- **GANベースCPU対戦相手の学習コードは `training/` 配下のPythonでオフラインに行う。** ブラウザ側の「ビルドツールなし・静的サイト」方針とは独立した領域として扱い、学習用の依存関係（PyTorch等）は `training/` 側の `pyproject.toml` でのみ管理する（ブラウザ側コードのゼロ依存方針には影響させない）。学習済みモデルを対局中にどう推論へ使うか（ブラウザ内推論 or バックエンドAPI）は別途決定する。
+- **GANベースCPU対戦相手の学習コードは `training/` 配下のPythonでオフラインに行う（GPU版Dockerコンテナ、[training/README.md](training/README.md) 参照）。** ブラウザ側の「ビルドツールなし・静的サイト」方針とは独立した領域として扱い、学習用の依存関係（PyTorch等）は `training/` 側の `pyproject.toml` でのみ管理する（ブラウザ側コードのゼロ依存方針には影響させない）。学習済みモデルは盤面サイズ・レベルごとにONNX形式へエクスポートし（`training/export_onnx.py`）、`data/models/{boardSize}/level{N}.onnx` として配置する（生成物のため大きなバイナリはリポジトリにコミットせず、`.gitignore`で除外）。
+- **GAN CPUのブラウザ側推論コード（`src/ai/`）は `src/logic/` とは別モジュールとして扱う。** `src/logic/` はDOM/three/非同期I/Oに一切依存しない純粋関数群のままとし、ONNXモデルのロード・非同期推論は `src/ai/` に閉じ込める。純粋なロジック部分（合法手マスク付きsoftmax・サンプリング等）は `onnxruntime-web` への依存を持たない形で切り出し、Node標準テストで検証する。
 
 ## JavaScript コーディング規約
 
