@@ -1,7 +1,9 @@
 import { createInitialBoard, BLACK, WHITE, oppositeColor } from './logic/board.js';
 import { getValidMoves, applyMove } from './logic/flip-rule.js';
 import { getNextTurn, getWinner, countStones } from './logic/game-state.js';
-import { chooseRandomMove } from './logic/cpu.js';
+import { chooseRandomMove, RANDOM_CPU_LEVEL } from './logic/cpu.js';
+import { loadModelSession } from './ai/model-loader.js';
+import { chooseGanMove } from './ai/gan-cpu.js';
 import { createSceneManager } from './render/scene-manager.js';
 import { createCameraControls } from './render/camera-controls.js';
 import { createBoardView } from './render/board-view.js';
@@ -31,6 +33,31 @@ const CPU_COLOR = WHITE;
 /** CPUが着手するまでの間（考えているように見せるための演出）。 */
 const CPU_MOVE_DELAY_MS = 700;
 
+/**
+ * CPUレベルに応じて着手を選ぶ。レベル1は既存のランダムCPU、レベル2以上は対応するONNXモデル
+ * （初回のみロードし、以降は`model-loader.js`のキャッシュを再利用）でのGAN方策サンプリング
+ * （[gan-cpu-self-play](../.claude/skills/gan-cpu-self-play/SKILL.md)）。モデルのロード・推論に
+ * 失敗した場合はゲームを止めずランダムな着手にフォールバックする。
+ * @param {Int8Array} board - 現在の盤面状態
+ * @param {number} color - CPUの色
+ * @param {number} boardSize - 盤面サイズ
+ * @param {number} cpuLevel - CPUレベル（1〜5）
+ * @returns {Promise<[number, number, number] | null>} 選んだ着手座標。合法手がなければ`null`
+ */
+const resolveCpuMove = async (board, color, boardSize, cpuLevel) => {
+  if (cpuLevel === RANDOM_CPU_LEVEL) {
+    return chooseRandomMove(board, color, boardSize);
+  }
+
+  try {
+    const session = await loadModelSession(boardSize, cpuLevel);
+    return await chooseGanMove(board, color, boardSize, session);
+  } catch (error) {
+    console.error('GAN CPUモデルの推論に失敗したため、ランダムな着手にフォールバックします', error);
+    return chooseRandomMove(board, color, boardSize);
+  }
+};
+
 const canvas = document.getElementById('board-canvas');
 const heroCanvas = document.getElementById('hero-canvas');
 const uiOverlay = document.getElementById('ui-overlay');
@@ -44,10 +71,10 @@ createMuteToggle(uiOverlay, (muted) => {
 });
 
 /**
- * 選択された対戦モード・盤面サイズで対局を開始する。3Dシーン・ゲーム状態・UIを一式構築する。
- * @param {{ battleMode: string, boardSize: number }} selection - スタート画面での選択内容
+ * 選択された対戦モード・盤面サイズ・CPUレベルで対局を開始する。3Dシーン・ゲーム状態・UIを一式構築する。
+ * @param {{ battleMode: string, boardSize: number, cpuLevel: number | null }} selection - スタート画面での選択内容
  */
-const startGame = ({ battleMode, boardSize }) => {
+const startGame = ({ battleMode, boardSize, cpuLevel }) => {
   heroScene.stop();
   heroCanvas.style.display = 'none';
   bgmPlayer.play('battle');
@@ -92,8 +119,11 @@ const startGame = ({ battleMode, boardSize }) => {
   const scheduleCpuMoveIfNeeded = () => {
     if (!isCpuTurn()) return;
 
-    setTimeout(() => {
-      const move = chooseRandomMove(board, CPU_COLOR, boardSize);
+    setTimeout(async () => {
+      // ONNX推論は非同期（モデルの初回ロードを含む）だが、`isCpuTurn`によるステータス表示
+      // （「CPU思考中…」）は着手が反映されるまで継続するため、待ち時間が伸びてもUIは
+      // フリーズしない。失敗時は`resolveCpuMove`内でランダムな着手にフォールバックする。
+      const move = await resolveCpuMove(board, CPU_COLOR, boardSize, cpuLevel);
       if (move === null) return;
       applyMoveAndAdvance(move);
     }, CPU_MOVE_DELAY_MS);
