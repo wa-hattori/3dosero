@@ -65,3 +65,26 @@ export const getFlippableStones = (board, x0, y0, z0, color) => {
  */
 export const isValidMove = (board, x0, y0, z0, color) =>
   getFlippableStones(board, x0, y0, z0, color).length > 0;
+
+/**
+ * 指定した座標に `color` の石を置き、挟んだ相手石をすべて反転した新しい盤面を返す。
+ * 引数の `board` は書き換えない（[style-guide](../../.claude/rules/javascript/style-guide.md) の不変更新パターン）。
+ * @param {Int8Array} board - 現在の盤面状態
+ * @param {number} x0 - 石を置くx座標
+ * @param {number} y0 - 石を置くy座標
+ * @param {number} z0 - 石を置くz座標
+ * @param {number} color - 置く石の色（`BLACK` または `WHITE`）
+ * @returns {Int8Array | null} 着手後の新しい盤面。無効な手の場合は `null`
+ */
+export const applyMove = (board, x0, y0, z0, color) => {
+  const flippable = getFlippableStones(board, x0, y0, z0, color);
+  if (flippable.length === 0) return null;
+
+  const next = board.slice();
+  next[indexOf(x0, y0, z0)] = color;
+  for (const [x, y, z] of flippable) {
+    next[indexOf(x, y, z)] = color;
+  }
+
+  return next;
+};

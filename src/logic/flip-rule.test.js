@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BLACK, WHITE, createEmptyBoard, indexOf } from './board.js';
-import { DIRECTIONS_3D, getFlippableStones, isValidMove } from './flip-rule.js';
+import { EMPTY, BLACK, WHITE, createEmptyBoard, indexOf } from './board.js';
+import { DIRECTIONS_3D, getFlippableStones, isValidMove, applyMove } from './flip-rule.js';
 
 const place = (board, x, y, z, color) => {
   board[indexOf(x, y, z)] = color;
@@ -113,4 +113,26 @@ test('isValidMove is true when the move would flip at least one stone', () => {
 test('isValidMove is false when the move would flip no stones', () => {
   const board = createEmptyBoard();
   assert.equal(isValidMove(board, 0, 0, 0, BLACK), false);
+});
+
+test('applyMove places the stone and flips captured stones', () => {
+  const board = place(place(createEmptyBoard(), 1, 0, 0, WHITE), 2, 0, 0, BLACK);
+  const next = applyMove(board, 0, 0, 0, BLACK);
+  assert.equal(next[indexOf(0, 0, 0)], BLACK);
+  assert.equal(next[indexOf(1, 0, 0)], BLACK);
+  assert.equal(next[indexOf(2, 0, 0)], BLACK);
+});
+
+test('applyMove does not mutate the board passed in', () => {
+  const board = place(place(createEmptyBoard(), 1, 0, 0, WHITE), 2, 0, 0, BLACK);
+  applyMove(board, 0, 0, 0, BLACK);
+  assert.equal(board[indexOf(0, 0, 0)], EMPTY);
+  assert.equal(board[indexOf(1, 0, 0)], WHITE);
+});
+
+test('applyMove returns null for an invalid move and leaves the board untouched', () => {
+  const board = createEmptyBoard();
+  const next = applyMove(board, 0, 0, 0, BLACK);
+  assert.equal(next, null);
+  assert.equal(board[indexOf(0, 0, 0)], EMPTY);
 });
