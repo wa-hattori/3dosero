@@ -61,3 +61,14 @@ test('does not allow placing on top of an existing stone', () => {
   const flippable = getFlippableStones(board, 0, 0, 0, BLACK);
   assert.deepEqual(flippable, []);
 });
+
+test('flips stones in multiple directions on the same plane at once', () => {
+  let board = createEmptyBoard();
+  // x方向: (2,3,0)=WHITE, (1,3,0)=BLACK
+  board = place(place(board, 2, 3, 0, WHITE), 1, 3, 0, BLACK);
+  // y方向: (3,2,0)=WHITE, (3,1,0)=BLACK
+  board = place(place(board, 3, 2, 0, WHITE), 3, 1, 0, BLACK);
+
+  const flippable = getFlippableStones(board, 3, 3, 0, BLACK);
+  assert.deepEqual(sortStones(flippable), sortStones([[2, 3, 0], [3, 2, 0]]));
+});
