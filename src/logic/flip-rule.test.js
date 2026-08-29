@@ -72,3 +72,15 @@ test('flips stones in multiple directions on the same plane at once', () => {
   const flippable = getFlippableStones(board, 3, 3, 0, BLACK);
   assert.deepEqual(sortStones(flippable), sortStones([[2, 3, 0], [3, 2, 0]]));
 });
+
+test('flips opponent stones straight up through layers', () => {
+  const board = place(place(createEmptyBoard(), 0, 0, 1, WHITE), 0, 0, 2, BLACK);
+  const flippable = getFlippableStones(board, 0, 0, 0, BLACK);
+  assert.deepEqual(sortStones(flippable), sortStones([[0, 0, 1]]));
+});
+
+test('flips opponent stones along a space diagonal through layers', () => {
+  const board = place(place(createEmptyBoard(), 1, 1, 1, WHITE), 2, 2, 2, BLACK);
+  const flippable = getFlippableStones(board, 0, 0, 0, BLACK);
+  assert.deepEqual(sortStones(flippable), sortStones([[1, 1, 1]]));
+});
