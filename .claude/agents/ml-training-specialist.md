@@ -12,7 +12,7 @@ model: inherit
 - [CLAUDE.md](../../CLAUDE.md) の「Python コーディング規約」「現時点のアーキテクチャ方針」。
 - [.claude/rules/python/style-guide.md](../rules/python/style-guide.md) — コーディング規約の具体例。
 - [.claude/rules/common/testing.md](../rules/common/testing.md) の「Python（学習コード）のテスト方針」節。
-- 学習アルゴリズム（モデル構成・盤面エンコーディング・報酬設計・自己対戦ループ・チェックポイント方針）の正本skill。未作成の間は、設計判断が未確定な点をユーザーに確認してから進める。
+- [.claude/skills/gan-cpu-self-play/SKILL.md](../skills/gan-cpu-self-play/SKILL.md) — 学習アルゴリズム（モデル構成・盤面エンコーディング・MCTS・自己対戦ループ・チェックポイント/レベル選定）の正本。実装がこれと一致しているか必ず照合する。
 
 ## 担当範囲
 
