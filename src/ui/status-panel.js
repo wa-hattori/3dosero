@@ -32,7 +32,7 @@ export const createStatusPanel = (container) => {
     }
 
     const passNotice = passedColor === null ? '' : `（${COLOR_LABELS[passedColor]}はパス）`;
-    panel.textContent = `手番：${COLOR_LABELS[currentTurn]}${passNotice}（ダブルクリックで着手）`;
+    panel.textContent = `手番：${COLOR_LABELS[currentTurn]}${passNotice}（すばやく2回タップ/クリックで着手）`;
   };
 
   return { update };
