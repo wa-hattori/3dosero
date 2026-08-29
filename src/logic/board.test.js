@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BOARD_SIZE,
+  SUPPORTED_BOARD_SIZES,
   EMPTY,
   BLACK,
   WHITE,
@@ -134,3 +135,48 @@ test('createInitialBoard colors each center cell by (x+y+z) parity', () => {
     assert.equal(board[indexOf(x, y, z)], expected, `(${x},${y},${z})`);
   }
 });
+
+test('SUPPORTED_BOARD_SIZES lists 4, 6, and 8', () => {
+  assert.deepEqual(SUPPORTED_BOARD_SIZES, [4, 6, 8]);
+});
+
+for (const boardSize of [4, 6]) {
+  test(`createEmptyBoard(${boardSize}) returns ${boardSize} cubed cells`, () => {
+    const board = createEmptyBoard(boardSize);
+    assert.equal(board.length, boardSize * boardSize * boardSize);
+  });
+
+  test(`createInitialBoard(${boardSize}) places exactly 4 black and 4 white stones`, () => {
+    const board = createInitialBoard(boardSize);
+    const counts = board.reduce(
+      (acc, cell) => ({ ...acc, [cell]: (acc[cell] ?? 0) + 1 }),
+      {},
+    );
+    assert.equal(counts[BLACK], 4);
+    assert.equal(counts[WHITE], 4);
+    assert.equal(counts[EMPTY], boardSize * boardSize * boardSize - 8);
+  });
+
+  test(`createInitialBoard(${boardSize}) places stones only in the center 2x2x2 cube`, () => {
+    const board = createInitialBoard(boardSize);
+    const centerLow = boardSize / 2 - 1;
+    const centerHigh = boardSize / 2;
+
+    for (let z = 0; z < boardSize; z++) {
+      for (let y = 0; y < boardSize; y++) {
+        for (let x = 0; x < boardSize; x++) {
+          const isCenter =
+            (x === centerLow || x === centerHigh) &&
+            (y === centerLow || y === centerHigh) &&
+            (z === centerLow || z === centerHigh);
+          if (isCenter) continue;
+          assert.equal(
+            board[indexOf(x, y, z, boardSize)],
+            EMPTY,
+            `(${x},${y},${z}) should be empty`,
+          );
+        }
+      }
+    }
+  });
+}

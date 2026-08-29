@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+import { BOARD_SIZE } from '../logic/board.js';
 
 const CAMERA_FOV_DEGREES = 45;
 const CAMERA_NEAR = 0.1;
 const CAMERA_FAR = 200;
-const INITIAL_CAMERA_DISTANCE = 16;
+/** 盤面サイズに対する初期カメラ距離の比率（各軸の座標値）。boardSize=8で従来の16と一致。 */
+const INITIAL_CAMERA_DISTANCE_RATIO = 2;
 const BACKGROUND_COLOR = 0x111318;
 
 /**
@@ -11,6 +13,7 @@ const BACKGROUND_COLOR = 0x111318;
  * 他のモジュールはここが返すインスタンスを読み取るだけで、直接 `new THREE.Scene()`
  * 等をしない（[three-js-conventions](../../.claude/rules/javascript/three-js-conventions.md)）。
  * @param {HTMLCanvasElement} canvas - 描画先のcanvas要素
+ * @param {number} [boardSize] - 盤面サイズ。初期カメラ距離のスケールに使う（省略時は `BOARD_SIZE`）
  * @returns {{
  *   scene: THREE.Scene,
  *   camera: THREE.PerspectiveCamera,
@@ -19,7 +22,7 @@ const BACKGROUND_COLOR = 0x111318;
  *   stop: () => void,
  * }}
  */
-export const createSceneManager = (canvas) => {
+export const createSceneManager = (canvas, boardSize = BOARD_SIZE) => {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(BACKGROUND_COLOR);
 
@@ -29,7 +32,8 @@ export const createSceneManager = (canvas) => {
     CAMERA_NEAR,
     CAMERA_FAR,
   );
-  camera.position.set(INITIAL_CAMERA_DISTANCE, INITIAL_CAMERA_DISTANCE, INITIAL_CAMERA_DISTANCE);
+  const initialCameraDistance = boardSize * INITIAL_CAMERA_DISTANCE_RATIO;
+  camera.position.set(initialCameraDistance, initialCameraDistance, initialCameraDistance);
   camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });

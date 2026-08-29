@@ -10,8 +10,8 @@ import {
   hasValidMove,
 } from './flip-rule.js';
 
-const place = (board, x, y, z, color) => {
-  board[indexOf(x, y, z)] = color;
+const place = (board, x, y, z, color, boardSize) => {
+  board[indexOf(x, y, z, boardSize)] = color;
   return board;
 };
 
@@ -201,4 +201,116 @@ test('hasValidMove is true when at least one legal move exists', () => {
 test('hasValidMove is false when no legal move exists', () => {
   const board = createEmptyBoard();
   assert.equal(hasValidMove(board, BLACK), false);
+});
+
+test('getFlippableStones respects a smaller boardSize', () => {
+  const boardSize = 4;
+  const board = place(
+    place(createEmptyBoard(boardSize), 1, 0, 0, WHITE, boardSize),
+    2, 0, 0, BLACK, boardSize,
+  );
+  const flippable = getFlippableStones(board, 0, 0, 0, BLACK, boardSize);
+  assert.deepEqual(sortStones(flippable), sortStones([[1, 0, 0]]));
+});
+
+test('getFlippableStones on a smaller board treats coordinates at the default BOARD_SIZE as out of bounds', () => {
+  const boardSize = 4;
+  const board = createEmptyBoard(boardSize);
+  // x=4はboardSize=4では盤外。デフォルトのBOARD_SIZE(8)基準に引きずられていないか確認する。
+  const flippable = getFlippableStones(board, 4, 0, 0, BLACK, boardSize);
+  assert.deepEqual(flippable, []);
+});
+
+test('getValidMoves on the 4x4x4 initial board returns only cells that isValidMove confirms', () => {
+  const boardSize = 4;
+  const board = createInitialBoard(boardSize);
+  const moves = getValidMoves(board, BLACK, boardSize);
+  assert.ok(moves.length > 0);
+  assert.ok(moves.every(([x, y, z]) => isValidMove(board, x, y, z, BLACK, boardSize)));
+});
+
+test('applyMove respects a smaller boardSize', () => {
+  const boardSize = 4;
+  const board = place(
+    place(createEmptyBoard(boardSize), 1, 0, 0, WHITE, boardSize),
+    2, 0, 0, BLACK, boardSize,
+  );
+  const next = applyMove(board, 0, 0, 0, BLACK, boardSize);
+  assert.equal(next[indexOf(0, 0, 0, boardSize)], BLACK);
+  assert.equal(next[indexOf(1, 0, 0, boardSize)], BLACK);
+});
+
+test('hasValidMove respects a smaller boardSize', () => {
+  const boardSize = 4;
+  const board = createInitialBoard(boardSize);
+  assert.equal(hasValidMove(board, BLACK, boardSize), true);
+});
+
+test('does not flip when an opponent run reaches the edge of a smaller board without a terminating stone', () => {
+  const boardSize = 4;
+  let board = createEmptyBoard(boardSize);
+  board = place(board, 2, 0, 0, WHITE, boardSize);
+  board = place(board, 3, 0, 0, WHITE, boardSize);
+  const flippable = getFlippableStones(board, 1, 0, 0, BLACK, boardSize);
+  assert.deepEqual(flippable, []);
+});
+
+test('does not flip past a smaller board edge even if it would alias with an in-bounds cell for the default BOARD_SIZE', () => {
+  // With boardSize=4, the run (2,0,0)->(3,0,0) hits the edge at x=4, which is
+  // out of bounds for boardSize=4 but would alias to flat index 4 (i.e. the
+  // real coordinate (0,1,0)) if the scan loop fell back to the default
+  // BOARD_SIZE=8 instead of the passed-in boardSize. Placing BLACK at
+  // (0,1,0) means a buggy implementation would misread it as the flip
+  // terminator; the correct implementation must reject x=4 as out of bounds.
+  const boardSize = 4;
+  let board = createEmptyBoard(boardSize);
+  board = place(board, 2, 0, 0, WHITE, boardSize);
+  board = place(board, 3, 0, 0, WHITE, boardSize);
+  board = place(board, 0, 1, 0, BLACK, boardSize);
+  const flippable = getFlippableStones(board, 1, 0, 0, BLACK, boardSize);
+  assert.deepEqual(flippable, []);
+});
+
+test('getFlippableStones respects a boardSize of 6', () => {
+  const boardSize = 6;
+  const board = place(
+    place(createEmptyBoard(boardSize), 1, 0, 0, WHITE, boardSize),
+    2, 0, 0, BLACK, boardSize,
+  );
+  const flippable = getFlippableStones(board, 0, 0, 0, BLACK, boardSize);
+  assert.deepEqual(sortStones(flippable), sortStones([[1, 0, 0]]));
+});
+
+test('does not flip when an opponent run reaches the edge of a boardSize-6 board without a terminating stone', () => {
+  const boardSize = 6;
+  let board = createEmptyBoard(boardSize);
+  board = place(board, boardSize - 2, 0, 0, WHITE, boardSize);
+  board = place(board, boardSize - 1, 0, 0, WHITE, boardSize);
+  const flippable = getFlippableStones(board, boardSize - 3, 0, 0, BLACK, boardSize);
+  assert.deepEqual(flippable, []);
+});
+
+test('getValidMoves on the 6x6x6 initial board returns only cells that isValidMove confirms', () => {
+  const boardSize = 6;
+  const board = createInitialBoard(boardSize);
+  const moves = getValidMoves(board, BLACK, boardSize);
+  assert.ok(moves.length > 0);
+  assert.ok(moves.every(([x, y, z]) => isValidMove(board, x, y, z, BLACK, boardSize)));
+});
+
+test('applyMove respects a boardSize of 6', () => {
+  const boardSize = 6;
+  const board = place(
+    place(createEmptyBoard(boardSize), 1, 0, 0, WHITE, boardSize),
+    2, 0, 0, BLACK, boardSize,
+  );
+  const next = applyMove(board, 0, 0, 0, BLACK, boardSize);
+  assert.equal(next[indexOf(0, 0, 0, boardSize)], BLACK);
+  assert.equal(next[indexOf(1, 0, 0, boardSize)], BLACK);
+});
+
+test('hasValidMove respects a boardSize of 6', () => {
+  const boardSize = 6;
+  const board = createInitialBoard(boardSize);
+  assert.equal(hasValidMove(board, BLACK, boardSize), true);
 });

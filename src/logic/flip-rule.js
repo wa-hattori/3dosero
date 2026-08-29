@@ -23,11 +23,12 @@ for (let dz = -1; dz <= 1; dz++) {
  * @param {number} y0 - 石を置くy座標
  * @param {number} z0 - 石を置くz座標
  * @param {number} color - 置く石の色（`BLACK` または `WHITE`）
+ * @param {number} [boardSize] - 盤面サイズ（省略時は `BOARD_SIZE`）
  * @returns {Array<[number, number, number]>} 反転対象の座標一覧（置けない場合は空配列）
  */
-export const getFlippableStones = (board, x0, y0, z0, color) => {
-  if (!isOnBoard(x0, y0, z0)) return [];
-  if (board[indexOf(x0, y0, z0)] !== EMPTY) return [];
+export const getFlippableStones = (board, x0, y0, z0, color, boardSize = BOARD_SIZE) => {
+  if (!isOnBoard(x0, y0, z0, boardSize)) return [];
+  if (board[indexOf(x0, y0, z0, boardSize)] !== EMPTY) return [];
 
   const opponent = oppositeColor(color);
   const flippable = [];
@@ -38,14 +39,18 @@ export const getFlippableStones = (board, x0, y0, z0, color) => {
     let y = y0 + dy;
     let z = z0 + dz;
 
-    while (isOnBoard(x, y, z) && board[indexOf(x, y, z)] === opponent) {
+    while (isOnBoard(x, y, z, boardSize) && board[indexOf(x, y, z, boardSize)] === opponent) {
       line.push([x, y, z]);
       x += dx;
       y += dy;
       z += dz;
     }
 
-    if (line.length > 0 && isOnBoard(x, y, z) && board[indexOf(x, y, z)] === color) {
+    if (
+      line.length > 0 &&
+      isOnBoard(x, y, z, boardSize) &&
+      board[indexOf(x, y, z, boardSize)] === color
+    ) {
       flippable.push(...line);
     }
   }
@@ -60,10 +65,11 @@ export const getFlippableStones = (board, x0, y0, z0, color) => {
  * @param {number} y0 - 判定するy座標
  * @param {number} z0 - 判定するz座標
  * @param {number} color - 置く石の色（`BLACK` または `WHITE`）
+ * @param {number} [boardSize] - 盤面サイズ（省略時は `BOARD_SIZE`）
  * @returns {boolean} 1マス以上反転できる、着手可能な手であれば true
  */
-export const isValidMove = (board, x0, y0, z0, color) =>
-  getFlippableStones(board, x0, y0, z0, color).length > 0;
+export const isValidMove = (board, x0, y0, z0, color, boardSize = BOARD_SIZE) =>
+  getFlippableStones(board, x0, y0, z0, color, boardSize).length > 0;
 
 /**
  * 指定した座標に `color` の石を置き、挟んだ相手石をすべて反転した新しい盤面を返す。
@@ -73,16 +79,17 @@ export const isValidMove = (board, x0, y0, z0, color) =>
  * @param {number} y0 - 石を置くy座標
  * @param {number} z0 - 石を置くz座標
  * @param {number} color - 置く石の色（`BLACK` または `WHITE`）
+ * @param {number} [boardSize] - 盤面サイズ（省略時は `BOARD_SIZE`）
  * @returns {Int8Array | null} 着手後の新しい盤面。無効な手の場合は `null`
  */
-export const applyMove = (board, x0, y0, z0, color) => {
-  const flippable = getFlippableStones(board, x0, y0, z0, color);
+export const applyMove = (board, x0, y0, z0, color, boardSize = BOARD_SIZE) => {
+  const flippable = getFlippableStones(board, x0, y0, z0, color, boardSize);
   if (flippable.length === 0) return null;
 
   const next = board.slice();
-  next[indexOf(x0, y0, z0)] = color;
+  next[indexOf(x0, y0, z0, boardSize)] = color;
   for (const [x, y, z] of flippable) {
-    next[indexOf(x, y, z)] = color;
+    next[indexOf(x, y, z, boardSize)] = color;
   }
 
   return next;
@@ -92,15 +99,16 @@ export const applyMove = (board, x0, y0, z0, color) => {
  * `color` が着手可能な座標をすべて列挙する。
  * @param {Int8Array} board - 現在の盤面状態
  * @param {number} color - 手番の色（`BLACK` または `WHITE`）
+ * @param {number} [boardSize] - 盤面サイズ（省略時は `BOARD_SIZE`）
  * @returns {Array<[number, number, number]>} 着手可能な座標一覧
  */
-export const getValidMoves = (board, color) => {
+export const getValidMoves = (board, color, boardSize = BOARD_SIZE) => {
   const moves = [];
 
-  for (let z = 0; z < BOARD_SIZE; z++) {
-    for (let y = 0; y < BOARD_SIZE; y++) {
-      for (let x = 0; x < BOARD_SIZE; x++) {
-        if (isValidMove(board, x, y, z, color)) {
+  for (let z = 0; z < boardSize; z++) {
+    for (let y = 0; y < boardSize; y++) {
+      for (let x = 0; x < boardSize; x++) {
+        if (isValidMove(board, x, y, z, color, boardSize)) {
           moves.push([x, y, z]);
         }
       }
@@ -114,6 +122,8 @@ export const getValidMoves = (board, color) => {
  * `color` に着手可能な手が1つでもあるかどうかを判定する。
  * @param {Int8Array} board - 現在の盤面状態
  * @param {number} color - 手番の色（`BLACK` または `WHITE`）
+ * @param {number} [boardSize] - 盤面サイズ（省略時は `BOARD_SIZE`）
  * @returns {boolean} 着手可能な手が1つ以上あれば true
  */
-export const hasValidMove = (board, color) => getValidMoves(board, color).length > 0;
+export const hasValidMove = (board, color, boardSize = BOARD_SIZE) =>
+  getValidMoves(board, color, boardSize).length > 0;

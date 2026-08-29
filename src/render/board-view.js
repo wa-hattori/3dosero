@@ -12,20 +12,21 @@ const GRID_OPACITY = 0.55;
 const GRID_Y_OFFSET = 0.01;
 
 /**
- * 8層分の緑地グリッド（黒線のマス目）を生成しシーンに追加する。
+ * `boardSize` 層分の緑地グリッド（黒線のマス目）を生成しシーンに追加する。
  * 層ごとの表示/非表示・不透明度の切り替えは、シーンを作り直さず
  * 各層メッシュの `visible`/`opacity` を更新することで行う
  * （[three-js-conventions](../../.claude/rules/javascript/three-js-conventions.md)）。
  * @param {import('three').Scene} scene - 追加先のシーン
+ * @param {number} [boardSize] - 盤面サイズ（省略時は `BOARD_SIZE`）
  * @returns {{
  *   group: import('three').Group,
  *   setActiveLayer: (activeLayer: number | null) => void,
  *   dispose: () => void,
  * }}
  */
-export const createBoardView = (scene) => {
+export const createBoardView = (scene, boardSize = BOARD_SIZE) => {
   const group = new THREE.Group();
-  const boardExtent = BOARD_SIZE * CELL_SIZE;
+  const boardExtent = boardSize * CELL_SIZE;
 
   const planeGeometry = new THREE.BoxGeometry(boardExtent, LAYER_THICKNESS, boardExtent);
   const planeMaterial = new THREE.MeshStandardMaterial({
@@ -39,16 +40,16 @@ export const createBoardView = (scene) => {
   const planeMeshes = [];
   const gridHelpers = [];
 
-  for (let z = 0; z < BOARD_SIZE; z++) {
-    const layerY = logicToWorld(0, 0, z).y;
+  for (let z = 0; z < boardSize; z++) {
+    const layerY = logicToWorld(0, 0, z, boardSize).y;
 
     const plane = new THREE.Mesh(planeGeometry, planeMaterial);
     plane.position.y = layerY;
     group.add(plane);
     planeMeshes.push(plane);
 
-    const gridHelper = new THREE.GridHelper(boardExtent, BOARD_SIZE, GRID_COLOR, GRID_COLOR);
-    gridHelper.position.y = getLayerSurfaceY(z) + GRID_Y_OFFSET;
+    const gridHelper = new THREE.GridHelper(boardExtent, boardSize, GRID_COLOR, GRID_COLOR);
+    gridHelper.position.y = getLayerSurfaceY(z, boardSize) + GRID_Y_OFFSET;
     gridHelper.material.transparent = true;
     gridHelper.material.opacity = GRID_OPACITY;
     group.add(gridHelper);
@@ -65,7 +66,7 @@ export const createBoardView = (scene) => {
   const setActiveLayer = (activeLayer) => {
     planeMaterial.opacity = activeLayer === null ? PLANE_OPACITY : SINGLE_LAYER_PLANE_OPACITY;
 
-    for (let z = 0; z < BOARD_SIZE; z++) {
+    for (let z = 0; z < boardSize; z++) {
       const isVisible = activeLayer === null || activeLayer === z;
       planeMeshes[z].visible = isVisible;
       gridHelpers[z].visible = isVisible;

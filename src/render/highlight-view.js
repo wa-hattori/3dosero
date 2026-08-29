@@ -7,8 +7,6 @@ const HIGHLIGHT_OPACITY = 0.55;
 const HIGHLIGHT_SIZE_RATIO = 0.9;
 /** z-fighting防止のため、ハイライト面を板の上面・グリッド線よりわずかに浮かせる。 */
 const HIGHLIGHT_Y_OFFSET = 0.02;
-/** 理論上取りうる最大着手可能マス数（盤面の全マス）。InstancedMeshの安全な上限値。 */
-const MAX_HIGHLIGHTS = BOARD_SIZE * BOARD_SIZE * BOARD_SIZE;
 
 const dummy = new THREE.Object3D();
 
@@ -17,13 +15,17 @@ const dummy = new THREE.Object3D();
  * あらかじめ用意した1つの`InstancedMesh`の表示数・座標更新のみで行う
  * （[three-js-conventions](../../.claude/rules/javascript/three-js-conventions.md)）。
  * @param {import('three').Scene} scene - 追加先のシーン
+ * @param {number} [boardSize] - 盤面サイズ（省略時は `BOARD_SIZE`）
  * @returns {{
  *   mesh: import('three').InstancedMesh,
  *   update: (moves: Array<[number, number, number]>) => void,
  *   dispose: () => void,
  * }}
  */
-export const createHighlightView = (scene) => {
+export const createHighlightView = (scene, boardSize = BOARD_SIZE) => {
+  /** 理論上取りうる最大着手可能マス数（盤面の全マス）。InstancedMeshの安全な上限値。 */
+  const maxHighlights = boardSize * boardSize * boardSize;
+
   const geometry = new THREE.PlaneGeometry(
     CELL_SIZE * HIGHLIGHT_SIZE_RATIO,
     CELL_SIZE * HIGHLIGHT_SIZE_RATIO,
@@ -35,7 +37,7 @@ export const createHighlightView = (scene) => {
     side: THREE.DoubleSide,
     depthWrite: false,
   });
-  const mesh = new THREE.InstancedMesh(geometry, material, MAX_HIGHLIGHTS);
+  const mesh = new THREE.InstancedMesh(geometry, material, maxHighlights);
   mesh.count = 0;
   scene.add(mesh);
 
@@ -45,8 +47,8 @@ export const createHighlightView = (scene) => {
    */
   const update = (moves) => {
     moves.forEach(([x, y, z], index) => {
-      const world = logicToWorld(x, y, z);
-      dummy.position.set(world.x, getLayerSurfaceY(z) + HIGHLIGHT_Y_OFFSET, world.z);
+      const world = logicToWorld(x, y, z, boardSize);
+      dummy.position.set(world.x, getLayerSurfaceY(z, boardSize) + HIGHLIGHT_Y_OFFSET, world.z);
       dummy.rotation.set(-Math.PI / 2, 0, 0);
       dummy.updateMatrix();
       mesh.setMatrixAt(index, dummy.matrix);

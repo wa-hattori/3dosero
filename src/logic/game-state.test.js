@@ -86,3 +86,27 @@ test('getNextTurn returns null on a stalemate that still has an empty cell', () 
   board[indexOf(7, 7, 7)] = EMPTY;
   assert.equal(getNextTurn(board, BLACK), null);
 });
+
+test('isGameOver respects a smaller boardSize (does not read past it)', () => {
+  const boardSize = 4;
+  const board = createInitialBoard(boardSize);
+  assert.equal(isGameOver(board, boardSize), false);
+});
+
+test('getNextTurn respects a smaller boardSize', () => {
+  const boardSize = 4;
+  const board = createInitialBoard(boardSize);
+  assert.equal(getNextTurn(board, BLACK, boardSize), WHITE);
+});
+
+test('isGameOver respects a boardSize of 6', () => {
+  const boardSize = 6;
+  const board = createInitialBoard(boardSize);
+  assert.equal(isGameOver(board, boardSize), false);
+});
+
+test('getNextTurn respects a boardSize of 6', () => {
+  const boardSize = 6;
+  const board = createInitialBoard(boardSize);
+  assert.equal(getNextTurn(board, BLACK, boardSize), WHITE);
+});
