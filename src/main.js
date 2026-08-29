@@ -156,6 +156,7 @@ const startGame = ({ battleMode, boardSize }) => {
   sceneManager.start((deltaSeconds) => {
     cameraControls.update();
     battleStarfield.update(deltaSeconds);
+    stoneView.tick();
   });
 };
 
