@@ -8,13 +8,14 @@ import { createStoneView } from './render/stone-view.js';
 import { createHighlightView } from './render/highlight-view.js';
 import { createInteraction } from './ui/interaction.js';
 import { createStatusPanel } from './ui/status-panel.js';
+import { createLayerControl } from './ui/layer-control.js';
 
 const canvas = document.getElementById('board-canvas');
 const uiOverlay = document.getElementById('ui-overlay');
 
 const sceneManager = createSceneManager(canvas);
 const cameraControls = createCameraControls(sceneManager.camera, canvas);
-createBoardView(sceneManager.scene);
+const boardView = createBoardView(sceneManager.scene);
 const stoneView = createStoneView(sceneManager.scene);
 const highlightView = createHighlightView(sceneManager.scene);
 const statusPanel = createStatusPanel(uiOverlay);
@@ -24,17 +25,22 @@ let currentTurn = BLACK;
 let validMoves = getValidMoves(board, currentTurn);
 let isOver = false;
 let winner = null;
+let activeLayer = null;
+
+const getVisibleMoves = () =>
+  activeLayer === null ? validMoves : validMoves.filter(([, , z]) => z === activeLayer);
 
 const render = (passedColor = null) => {
-  stoneView.update(board);
-  highlightView.update(validMoves);
+  boardView.setActiveLayer(activeLayer);
+  stoneView.update(board, activeLayer);
+  highlightView.update(getVisibleMoves());
   statusPanel.update({ currentTurn, passedColor, isOver, winner });
 };
 
 render();
 
 const handleMoveSelected = (instanceIndex) => {
-  const move = validMoves[instanceIndex];
+  const move = getVisibleMoves()[instanceIndex];
   if (move === undefined) return;
 
   const [x, y, z] = move;
@@ -59,6 +65,11 @@ createInteraction({
   camera: sceneManager.camera,
   highlightMesh: highlightView.mesh,
   onSelect: handleMoveSelected,
+});
+
+createLayerControl(uiOverlay, (layer) => {
+  activeLayer = layer;
+  render();
 });
 
 sceneManager.start(() => cameraControls.update());

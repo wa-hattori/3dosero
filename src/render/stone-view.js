@@ -26,7 +26,7 @@ const createStoneMesh = (scene, color) => {
  * 石1個ごとにメッシュを新規生成せず、色ごとに共有ジオメトリ/マテリアルを使い回す
  * （[three-js-conventions](../../.claude/rules/javascript/three-js-conventions.md)）。
  * @param {import('three').Scene} scene - 追加先のシーン
- * @returns {{ update: (board: Int8Array) => void, dispose: () => void }}
+ * @returns {{ update: (board: Int8Array, activeLayer?: number | null) => void, dispose: () => void }}
  */
 export const createStoneView = (scene) => {
   const blackMesh = createStoneMesh(scene, BLACK_STONE_COLOR);
@@ -36,12 +36,15 @@ export const createStoneView = (scene) => {
   /**
    * 盤面状態を読み取り、石のインスタンス位置と表示数を更新する。
    * @param {Int8Array} board - 現在の盤面状態
+   * @param {number | null} [activeLayer] - 指定した層のみ表示する。`null`/省略時は全層表示
    */
-  const update = (board) => {
+  const update = (board, activeLayer = null) => {
     let blackCount = 0;
     let whiteCount = 0;
 
     for (let z = 0; z < BOARD_SIZE; z++) {
+      if (activeLayer !== null && activeLayer !== z) continue;
+
       for (let y = 0; y < BOARD_SIZE; y++) {
         for (let x = 0; x < BOARD_SIZE; x++) {
           const cell = board[indexOf(x, y, z)];

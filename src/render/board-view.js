@@ -5,6 +5,8 @@ import { CELL_SIZE, logicToWorld } from './board-layout.js';
 const GRID_COLOR = 0x000000;
 const PLANE_COLOR = 0x2f7a3d;
 const PLANE_OPACITY = 0.35;
+/** 特定の1層だけに絞り込んだ時の不透明度（他層は非表示になるため、より濃く見せる）。 */
+const SINGLE_LAYER_PLANE_OPACITY = 0.85;
 const GRID_OPACITY = 0.55;
 /** z-fighting防止のため、グリッド線を面よりわずかに浮かせる。 */
 const GRID_Y_OFFSET = 0.01;
@@ -15,7 +17,11 @@ const GRID_Y_OFFSET = 0.01;
  * 各層メッシュの `visible`/`opacity` を更新することで行う
  * （[three-js-conventions](../../.claude/rules/javascript/three-js-conventions.md)）。
  * @param {import('three').Scene} scene - 追加先のシーン
- * @returns {{ group: import('three').Group, dispose: () => void }}
+ * @returns {{
+ *   group: import('three').Group,
+ *   setActiveLayer: (activeLayer: number | null) => void,
+ *   dispose: () => void,
+ * }}
  */
 export const createBoardView = (scene) => {
   const group = new THREE.Group();
@@ -30,6 +36,7 @@ export const createBoardView = (scene) => {
     depthWrite: false,
   });
 
+  const planeMeshes = [];
   const gridHelpers = [];
 
   for (let z = 0; z < BOARD_SIZE; z++) {
@@ -39,6 +46,7 @@ export const createBoardView = (scene) => {
     plane.rotation.x = -Math.PI / 2;
     plane.position.y = layerY;
     group.add(plane);
+    planeMeshes.push(plane);
 
     const gridHelper = new THREE.GridHelper(boardExtent, BOARD_SIZE, GRID_COLOR, GRID_COLOR);
     gridHelper.position.y = layerY + GRID_Y_OFFSET;
@@ -50,6 +58,21 @@ export const createBoardView = (scene) => {
 
   scene.add(group);
 
+  /**
+   * 表示する層を絞り込む。既存メッシュの`visible`/`opacity`のみ更新し、
+   * シーンは作り直さない。
+   * @param {number | null} activeLayer - 表示する層（`z`）。`null` なら全層表示
+   */
+  const setActiveLayer = (activeLayer) => {
+    planeMaterial.opacity = activeLayer === null ? PLANE_OPACITY : SINGLE_LAYER_PLANE_OPACITY;
+
+    for (let z = 0; z < BOARD_SIZE; z++) {
+      const isVisible = activeLayer === null || activeLayer === z;
+      planeMeshes[z].visible = isVisible;
+      gridHelpers[z].visible = isVisible;
+    }
+  };
+
   const dispose = () => {
     planeGeometry.dispose();
     planeMaterial.dispose();
@@ -60,5 +83,5 @@ export const createBoardView = (scene) => {
     scene.remove(group);
   };
 
-  return { group, dispose };
+  return { group, setActiveLayer, dispose };
 };
