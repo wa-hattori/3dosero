@@ -37,3 +37,15 @@ test('flips a single opponent stone in a straight line', () => {
   const flippable = getFlippableStones(board, 0, 0, 0, BLACK);
   assert.deepEqual(sortStones(flippable), sortStones([[1, 0, 0]]));
 });
+
+test('does not flip when the adjacent cell is empty', () => {
+  const board = createEmptyBoard();
+  const flippable = getFlippableStones(board, 0, 0, 0, BLACK);
+  assert.deepEqual(flippable, []);
+});
+
+test('does not flip when an opponent run reaches the edge of the board without a terminating stone', () => {
+  const board = place(createEmptyBoard(), 7, 0, 0, WHITE);
+  const flippable = getFlippableStones(board, 6, 0, 0, BLACK);
+  assert.deepEqual(flippable, []);
+});
