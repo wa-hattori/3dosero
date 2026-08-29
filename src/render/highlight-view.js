@@ -7,6 +7,9 @@ const HIGHLIGHT_OPACITY = 0.55;
 const HIGHLIGHT_SIZE_RATIO = 0.9;
 /** z-fighting防止のため、ハイライト面を板の上面・グリッド線よりわずかに浮かせる。 */
 const HIGHLIGHT_Y_OFFSET = 0.02;
+/** 1タップ目で強調表示するマスの拡大率。 */
+const EMPHASIZED_SCALE = 1.25;
+const NORMAL_SCALE = 1;
 
 const dummy = new THREE.Object3D();
 
@@ -19,6 +22,7 @@ const dummy = new THREE.Object3D();
  * @returns {{
  *   mesh: import('three').InstancedMesh,
  *   update: (moves: Array<[number, number, number]>) => void,
+ *   setEmphasized: (instanceIndex: number | null) => void,
  *   dispose: () => void,
  * }}
  */
@@ -41,20 +45,18 @@ export const createHighlightView = (scene, boardSize = BOARD_SIZE) => {
   mesh.count = 0;
   scene.add(mesh);
 
-  /**
-   * 着手可能マスの座標一覧で表示を更新する。
-   * @param {Array<[number, number, number]>} moves - `getValidMoves` が返す座標一覧
-   */
-  const update = (moves) => {
-    moves.forEach(([x, y, z], index) => {
-      const world = logicToWorld(x, y, z, boardSize);
-      dummy.position.set(world.x, getLayerSurfaceY(z, boardSize) + HIGHLIGHT_Y_OFFSET, world.z);
-      dummy.rotation.set(-Math.PI / 2, 0, 0);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(index, dummy.matrix);
-    });
+  let currentMoves = [];
 
-    mesh.count = moves.length;
+  const applyInstanceTransform = (index, [x, y, z], scale) => {
+    const world = logicToWorld(x, y, z, boardSize);
+    dummy.position.set(world.x, getLayerSurfaceY(z, boardSize) + HIGHLIGHT_Y_OFFSET, world.z);
+    dummy.rotation.set(-Math.PI / 2, 0, 0);
+    dummy.scale.setScalar(scale);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(index, dummy.matrix);
+  };
+
+  const markInstanceMatrixDirty = () => {
     mesh.instanceMatrix.needsUpdate = true;
     // InstancedMeshのboundingSphereはキャッシュされ、setMatrixAt/countの変更だけでは
     // 自動更新されない。nullに戻して次回のレイキャスト/フラスタムカリング時に現在の
@@ -65,11 +67,35 @@ export const createHighlightView = (scene, boardSize = BOARD_SIZE) => {
     mesh.boundingBox = null;
   };
 
+  /**
+   * 着手可能マスの座標一覧で表示を更新する。
+   * @param {Array<[number, number, number]>} moves - `getValidMoves` が返す座標一覧
+   */
+  const update = (moves) => {
+    currentMoves = moves;
+    moves.forEach((move, index) => applyInstanceTransform(index, move, NORMAL_SCALE));
+    mesh.count = moves.length;
+    markInstanceMatrixDirty();
+  };
+
+  /**
+   * 1タップ目のフィードバックとして、指定したマスを少し拡大して強調する。
+   * 他のマスは通常サイズに戻す。`instanceIndex` が `null` なら全マスを通常サイズに戻す。
+   * @param {number | null} instanceIndex - 強調するインスタンス番号
+   */
+  const setEmphasized = (instanceIndex) => {
+    currentMoves.forEach((move, index) => {
+      const scale = index === instanceIndex ? EMPHASIZED_SCALE : NORMAL_SCALE;
+      applyInstanceTransform(index, move, scale);
+    });
+    markInstanceMatrixDirty();
+  };
+
   const dispose = () => {
     geometry.dispose();
     material.dispose();
     scene.remove(mesh);
   };
 
-  return { mesh, update, dispose };
+  return { mesh, update, setEmphasized, dispose };
 };

@@ -71,6 +71,7 @@ const startGame = (boardSize) => {
     camera: sceneManager.camera,
     highlightMesh: highlightView.mesh,
     onSelect: handleMoveSelected,
+    onPendingChange: (instanceIndex) => highlightView.setEmphasized(instanceIndex),
   });
 
   createLayerControl(
