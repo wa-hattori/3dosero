@@ -31,3 +31,9 @@ export const isOnBoard = (x, y, z) => {
   if (z < 0 || z >= BOARD_SIZE) return false;
   return true;
 };
+
+/**
+ * 全マスが `EMPTY` の盤面を新規生成する。
+ * @returns {Int8Array} 長さ `BOARD_SIZE ** 3` の盤面配列
+ */
+export const createEmptyBoard = () => new Int8Array(BOARD_SIZE * BOARD_SIZE * BOARD_SIZE);

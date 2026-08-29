@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BOARD_SIZE, EMPTY, BLACK, WHITE, indexOf, isOnBoard } from './board.js';
+import { BOARD_SIZE, EMPTY, BLACK, WHITE, indexOf, isOnBoard, createEmptyBoard } from './board.js';
 
 test('BOARD_SIZE is 8', () => {
   assert.equal(BOARD_SIZE, 8);
@@ -60,4 +60,18 @@ test('isOnBoard is false when y is out of range', () => {
 test('isOnBoard is false when z is out of range', () => {
   assert.equal(isOnBoard(0, 0, -1), false);
   assert.equal(isOnBoard(0, 0, BOARD_SIZE), false);
+});
+
+test('createEmptyBoard returns BOARD_SIZE cubed cells', () => {
+  const board = createEmptyBoard();
+  assert.equal(board.length, BOARD_SIZE * BOARD_SIZE * BOARD_SIZE);
+});
+
+test('createEmptyBoard fills every cell with EMPTY', () => {
+  const board = createEmptyBoard();
+  assert.ok(board.every((cell) => cell === EMPTY));
+});
+
+test('createEmptyBoard returns a new board instance on each call', () => {
+  assert.notEqual(createEmptyBoard(), createEmptyBoard());
 });
