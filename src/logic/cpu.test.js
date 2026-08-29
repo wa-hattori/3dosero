@@ -36,7 +36,7 @@ test('chooseRandomMove respects a smaller boardSize', () => {
 
 test('chooseRandomMove never returns a move for a color with no options even if the other color has moves', () => {
   const boardSize = 4;
-  let board = createEmptyBoard(boardSize);
+  const board = createEmptyBoard(boardSize);
   board[indexOf(0, 0, 0, boardSize)] = WHITE;
   board[indexOf(1, 0, 0, boardSize)] = BLACK;
   // BLACKは盤外にしか置けず着手不可、WHITEは(2,0,0)に着手可能
