@@ -20,9 +20,9 @@ description: ゲームロジックのユニットテスト方針（言語非依�
 
 - 1テストケースで1つの振る舞いのみを検証する。
 - テスト名は「何をしたら何が起きるか」が読めるようにする（例: `flips opponent stones in a straight vertical line`）。
-- 境界値（盤面の端、層の最上/最下、石が1つも挟めないケース）を必ずカバーする。3D反転ルールの正本は [.claude/skills/othello-3d-flip-rule.md](../../skills/othello-3d-flip-rule.md)。
+- 境界値（盤面の端、層の最上/最下、石が1つも挟めないケース）を必ずカバーする。3D反転ルールの正本は [othello-3d-flip-rule](../../skills/othello-3d-flip-rule/SKILL.md)。
 - テストランナー・アサーションライブラリは、ゲームロジック実装に着手する際に選定し本ドキュメントを更新する（現時点では未導入）。
 
 ## TDDループ
 
-新しいゲームロジックを実装する際は [.claude/skills/tdd-loop.md](../../skills/tdd-loop.md) の Red → Green → Refactor ループに従う。
+新しいゲームロジックを実装する際は [tdd-loop](../../skills/tdd-loop/SKILL.md) の Red → Green → Refactor ループに従う。
