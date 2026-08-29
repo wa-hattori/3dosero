@@ -92,6 +92,7 @@ export const createHeroScene = (canvas) => {
     boardView.dispose();
     stoneView.dispose();
     starfield.dispose();
+    renderer.dispose();
   };
 
   return { stop };
