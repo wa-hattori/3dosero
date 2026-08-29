@@ -84,3 +84,23 @@ test('flips opponent stones along a space diagonal through layers', () => {
   const flippable = getFlippableStones(board, 0, 0, 0, BLACK);
   assert.deepEqual(sortStones(flippable), sortStones([[1, 1, 1]]));
 });
+
+test('does not flip a run of opponent stones that ends exactly at the board edge with no terminator', () => {
+  let board = createEmptyBoard();
+  board = place(board, 6, 0, 0, WHITE);
+  board = place(board, 7, 0, 0, WHITE);
+  const flippable = getFlippableStones(board, 5, 0, 0, BLACK);
+  assert.deepEqual(flippable, []);
+});
+
+test('flips a full corner-to-corner space diagonal run', () => {
+  let board = createEmptyBoard();
+  const opponentRun = [[1, 1, 1], [2, 2, 2], [3, 3, 3], [4, 4, 4], [5, 5, 5], [6, 6, 6]];
+  for (const [x, y, z] of opponentRun) {
+    board = place(board, x, y, z, WHITE);
+  }
+  board = place(board, 7, 7, 7, BLACK);
+
+  const flippable = getFlippableStones(board, 0, 0, 0, BLACK);
+  assert.deepEqual(sortStones(flippable), sortStones(opponentRun));
+});
