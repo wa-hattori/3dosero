@@ -126,7 +126,13 @@ export const createSpaceAudio = () => {
     if (currentDrone === null) return;
 
     if (muted) {
-      currentDrone.gainNode.gain.value = 0;
+      // fadeIn()による将来へのlinearRampToValueAtTimeが予約済みの場合、
+      // 単に.gain.valueへ代入するだけ（暗黙のsetValueAtTime）では
+      // その予約を消せず、フェードインが完了する頃に音量が勝手に戻ってしまう。
+      // cancelScheduledValuesで予約を破棄してから0を明示的に設定する。
+      const now = audioContext.currentTime;
+      currentDrone.gainNode.gain.cancelScheduledValues(now);
+      currentDrone.gainNode.gain.setValueAtTime(0, now);
     } else {
       currentDrone.fadeIn();
     }
