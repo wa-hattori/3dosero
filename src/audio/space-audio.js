@@ -4,8 +4,8 @@
  * スタート画面用（穏やか）と対局画面用（やや緊張感のある変調）の2種類。
  */
 const PROFILES = {
-  start: { baseFrequency: 98, detuneCents: [-6, 0, 7], filterFrequency: 500, lfoRate: 0.05, gain: 0.05 },
-  battle: { baseFrequency: 73, detuneCents: [-9, 0, 9, 14], filterFrequency: 700, lfoRate: 0.12, gain: 0.06 },
+  start: { baseFrequency: 98, detuneCents: [-6, 0, 7], filterFrequency: 500, lfoRate: 0.05, gain: 0.14 },
+  battle: { baseFrequency: 73, detuneCents: [-9, 0, 9, 14], filterFrequency: 700, lfoRate: 0.12, gain: 0.16 },
 };
 
 const FADE_IN_SECONDS = 2.5;
@@ -97,7 +97,9 @@ export const createSpaceAudio = () => {
       audioContext = new AudioContextClass();
     }
     if (audioContext.state === 'suspended') {
-      audioContext.resume();
+      // ユーザー操作に応答する形（呼び出し元の同期的な呼び出しスタック内）で
+      // resume()を開始することが自動再生ポリシーの許可条件。完了を待つ必要はない。
+      audioContext.resume().catch(() => {});
     }
     return audioContext;
   };
