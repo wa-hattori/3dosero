@@ -14,3 +14,15 @@ export const countStones = (board) =>
     },
     { [BLACK]: 0, [WHITE]: 0 },
   );
+
+/**
+ * 石数が多い方の色を返す。
+ * @param {Int8Array} board - 現在の盤面状態
+ * @returns {number | null} 石数が多い方の色（`BLACK` または `WHITE`）。同数なら `null`
+ */
+export const getWinner = (board) => {
+  const counts = countStones(board);
+  if (counts[BLACK] > counts[WHITE]) return BLACK;
+  if (counts[WHITE] > counts[BLACK]) return WHITE;
+  return null;
+};
