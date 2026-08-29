@@ -203,10 +203,16 @@ function evaluate_checkpoints(checkpoints, games_per_matchup):
       candidate = closest_by_rating(ratings, target, excluding=selected)
       selected.append(candidate)
 
-    return selected  # レベル2, 3, 4, 5の順（selected[0]が最弱=レベル2）
+    # target を昇順に辿っても、レーティング分布が疎・不均一だと selected の追加順序が
+    # レーティング昇順と一致するとは限らない。「selected[0]が最弱・selected[-1]が最強」の
+    # 不変条件を常に満たすよう、最後にレーティング昇順（同点はcheckpoint_id昇順）で
+    # 並び替える。並び替えは選ばれるチェックポイント自体は変えず、返す順序のみを正規化する。
+    return sorted(selected, key=lambda checkpoint_id: (ratings[checkpoint_id], checkpoint_id))
+    # レベル2, 3, 4, 5の順（selected[0]が最弱=レベル2）
   ```
 
   - `num_levels` 個の相異なるチェックポイントが選べない（チェックポイント総数が `num_levels` 未満）場合はエラーとする。
+  - `closest_by_rating` で候補の距離が同点の場合は、決定論的にするため `checkpoint_id` 昇順で先に来る方を選ぶ。
 - レベル1（最下級）は既存の `chooseRandomMove` を採用し、この評価プロセスには含めない。
 
 ## ブラウザ推論仕様（Phase D向けの取り決め）
