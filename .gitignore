@@ -34,5 +34,6 @@ venv/
 # ML training checkpoints (regenerate via training/ scripts; not committed)
 training/checkpoints/
 
-# GAN CPU ONNX models (large binary artifacts; distributed separately, not committed)
-data/models/
+# GAN CPU ONNX models: intentionally NOT ignored. data/models/{boardSize}/level{2..5}.onnx
+# are real deployment artifacts fetched by the browser at runtime (see src/ai/model-loader.js)
+# and are committed like the other static assets under data/.
