@@ -9,67 +9,80 @@ import { createHighlightView } from './render/highlight-view.js';
 import { createInteraction } from './ui/interaction.js';
 import { createStatusPanel } from './ui/status-panel.js';
 import { createLayerControl } from './ui/layer-control.js';
+import { createStartScreen } from './ui/start-screen.js';
 
 const canvas = document.getElementById('board-canvas');
 const uiOverlay = document.getElementById('ui-overlay');
 
-const sceneManager = createSceneManager(canvas);
-const cameraControls = createCameraControls(sceneManager.camera, canvas);
-const boardView = createBoardView(sceneManager.scene);
-const stoneView = createStoneView(sceneManager.scene);
-const highlightView = createHighlightView(sceneManager.scene);
-const statusPanel = createStatusPanel(uiOverlay);
+/**
+ * 選択された盤面サイズで対局を開始する。3Dシーン・ゲーム状態・UIを一式構築する。
+ * @param {number} boardSize - 盤面サイズ（`SUPPORTED_BOARD_SIZES` のいずれか）
+ */
+const startGame = (boardSize) => {
+  const sceneManager = createSceneManager(canvas, boardSize);
+  const cameraControls = createCameraControls(sceneManager.camera, canvas, boardSize);
+  const boardView = createBoardView(sceneManager.scene, boardSize);
+  const stoneView = createStoneView(sceneManager.scene, boardSize);
+  const highlightView = createHighlightView(sceneManager.scene, boardSize);
+  const statusPanel = createStatusPanel(uiOverlay);
 
-let board = createInitialBoard();
-let currentTurn = BLACK;
-let validMoves = getValidMoves(board, currentTurn);
-let isOver = false;
-let winner = null;
-let activeLayer = null;
+  let board = createInitialBoard(boardSize);
+  let currentTurn = BLACK;
+  let validMoves = getValidMoves(board, currentTurn, boardSize);
+  let isOver = false;
+  let winner = null;
+  let activeLayer = null;
 
-const getVisibleMoves = () =>
-  activeLayer === null ? validMoves : validMoves.filter(([, , z]) => z === activeLayer);
+  const getVisibleMoves = () =>
+    activeLayer === null ? validMoves : validMoves.filter(([, , z]) => z === activeLayer);
 
-const render = (passedColor = null) => {
-  boardView.setActiveLayer(activeLayer);
-  stoneView.update(board, activeLayer);
-  highlightView.update(getVisibleMoves());
-  statusPanel.update({ currentTurn, passedColor, isOver, winner });
-};
+  const render = (passedColor = null) => {
+    boardView.setActiveLayer(activeLayer);
+    stoneView.update(board, activeLayer);
+    highlightView.update(getVisibleMoves());
+    statusPanel.update({ currentTurn, passedColor, isOver, winner });
+  };
 
-render();
-
-const handleMoveSelected = (instanceIndex) => {
-  const move = getVisibleMoves()[instanceIndex];
-  if (move === undefined) return;
-
-  const [x, y, z] = move;
-  const next = applyMove(board, x, y, z, currentTurn);
-  if (next === null) return;
-
-  board = next;
-  const opponent = oppositeColor(currentTurn);
-  const nextTurn = getNextTurn(board, currentTurn);
-  const passedColor = nextTurn === currentTurn ? opponent : null;
-
-  isOver = nextTurn === null;
-  winner = isOver ? getWinner(board) : null;
-  currentTurn = nextTurn ?? currentTurn;
-  validMoves = isOver ? [] : getValidMoves(board, currentTurn);
-
-  render(passedColor);
-};
-
-createInteraction({
-  domElement: canvas,
-  camera: sceneManager.camera,
-  highlightMesh: highlightView.mesh,
-  onSelect: handleMoveSelected,
-});
-
-createLayerControl(uiOverlay, (layer) => {
-  activeLayer = layer;
   render();
-});
 
-sceneManager.start(() => cameraControls.update());
+  const handleMoveSelected = (instanceIndex) => {
+    const move = getVisibleMoves()[instanceIndex];
+    if (move === undefined) return;
+
+    const [x, y, z] = move;
+    const next = applyMove(board, x, y, z, currentTurn, boardSize);
+    if (next === null) return;
+
+    board = next;
+    const opponent = oppositeColor(currentTurn);
+    const nextTurn = getNextTurn(board, currentTurn, boardSize);
+    const passedColor = nextTurn === currentTurn ? opponent : null;
+
+    isOver = nextTurn === null;
+    winner = isOver ? getWinner(board) : null;
+    currentTurn = nextTurn ?? currentTurn;
+    validMoves = isOver ? [] : getValidMoves(board, currentTurn, boardSize);
+
+    render(passedColor);
+  };
+
+  createInteraction({
+    domElement: canvas,
+    camera: sceneManager.camera,
+    highlightMesh: highlightView.mesh,
+    onSelect: handleMoveSelected,
+  });
+
+  createLayerControl(
+    uiOverlay,
+    (layer) => {
+      activeLayer = layer;
+      render();
+    },
+    boardSize,
+  );
+
+  sceneManager.start(() => cameraControls.update());
+};
+
+createStartScreen(uiOverlay, startGame);
