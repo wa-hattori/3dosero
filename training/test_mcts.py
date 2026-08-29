@@ -305,13 +305,12 @@ def test_mcts_search_is_deterministic_given_the_same_rng_seed(cuda_device: torch
     assert distribution_a == distribution_b
 
 
-def test_evaluate_leaf_handles_forced_pass_without_expanding_the_leaf(
-    cuda_device: torch.device,
-) -> None:
-    # 4x4x4盤で、以下の11手を打った局面でWHITEが(0,2,0)に着手すると、直後にBLACKが
-    # 着手不能（パス）になることを事前に(training/game_rules.pyのみを使って)確認済みの
-    # 決定論的な局面を使う。MCTS探索のランダムな手選びに頼らず、パス分岐を直接検証する。
-    board_size = TEST_BOARD_SIZE
+def _forced_pass_board(board_size: int) -> list[int]:
+    """4x4x4盤で、以下の11手を打った局面でWHITEが(0,2,0)に着手すると、直後にBLACKが
+    着手不能（パス）になることを事前に(training/game_rules.pyのみを使って)確認済みの
+    決定論的な局面を返す。MCTS探索のランダムな手選びに頼らず、パス分岐を直接検証する
+    ためのフィクスチャ。
+    """
     moves = [
         ((1, 0, 2), BLACK),
         ((0, 3, 3), WHITE),
@@ -329,6 +328,14 @@ def test_evaluate_leaf_handles_forced_pass_without_expanding_the_leaf(
     board = create_initial_board(board_size)
     for (x, y, z), color in moves:
         board = apply_move(board, x, y, z, color, board_size)
+    return board
+
+
+def test_evaluate_leaf_handles_forced_pass_without_expanding_the_leaf(
+    cuda_device: torch.device,
+) -> None:
+    board_size = TEST_BOARD_SIZE
+    board = _forced_pass_board(board_size)
 
     assert index_of(0, 2, 0, board_size) >= 0  # sanity: fixture uses valid coordinates
     assert get_valid_moves(board, BLACK, board_size) == []
@@ -343,11 +350,64 @@ def test_evaluate_leaf_handles_forced_pass_without_expanding_the_leaf(
         BLACK,
         network,
         board_size,
-        num_simulations=4,
         device=cuda_device,
         puct_c=1.5,
         rng=rng,
+        pass_recursion_budget=4,
     )
 
     assert node.is_expanded is False
     assert -1.0 <= value <= 1.0
+
+
+def test_evaluate_leaf_pass_branch_uses_pass_recursion_budget_not_num_simulations(
+    cuda_device: torch.device, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """回帰テスト: パス局面の再帰探索が、外側の大きい`num_simulations`を再利用せず、
+    独立した小さい`pass_recursion_budget`を使うことを確認する。
+
+    実運用（自己対戦・強さ評価をGPU上で実行）で、`num_simulations`を再帰にそのまま
+    使うと、パス発生率が無視できない局面（盤面が埋まってくる終盤、探索ノイズ・温度
+    なしの決定論的な対局）で再帰が`num_simulations`のべき乗オーダーに膨れ上がり、
+    1局が数十分単位で停止して見えるほど遅くなる問題が実測された。この修正の
+    退行を防ぐための直接的な検証。
+    """
+    board_size = TEST_BOARD_SIZE
+    board = _forced_pass_board(board_size)
+    assert get_valid_moves(board, BLACK, board_size) == []
+
+    network = make_small_network(board_size).to(cuda_device)
+    node = MCTSNode(prior=1.0)
+    rng = np.random.default_rng(3)
+
+    import training.mcts as mcts_module
+
+    recorded_num_simulations: list[int] = []
+    original_run_simulations = mcts_module._run_simulations
+
+    def spy_run_simulations(*args, **kwargs):
+        recorded_num_simulations.append(
+            kwargs.get("num_simulations", args[4] if len(args) > 4 else None)
+        )
+        return original_run_simulations(*args, **kwargs)
+
+    monkeypatch.setattr(mcts_module, "_run_simulations", spy_run_simulations)
+
+    huge_num_simulations_that_should_never_be_used = 10_000
+    _evaluate_leaf(
+        node,
+        board,
+        BLACK,
+        network,
+        board_size,
+        device=cuda_device,
+        puct_c=1.5,
+        rng=rng,
+        pass_recursion_budget=4,
+    )
+
+    # 少なくとも1回はパス分岐の再帰探索が発生し、そのすべてが小さい固定予算のみを
+    # 使う(入れ子の再帰があっても、外側のnum_simulationsに膨れ上がらない)。
+    assert len(recorded_num_simulations) >= 1
+    assert all(n == 4 for n in recorded_num_simulations)
+    assert huge_num_simulations_that_should_never_be_used not in recorded_num_simulations

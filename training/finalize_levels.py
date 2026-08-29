@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from training.checkpoint_eval import evaluate_checkpoints
+from training.checkpoint_eval import DEFAULT_NUM_OPPONENTS_PER_CHECKPOINT, evaluate_checkpoints
 from training.config import (
     BASE_CHANNELS,
     ELO_BASE_RATING,
@@ -47,6 +47,7 @@ def finalize_levels(
     k_factor: float = ELO_K_FACTOR,
     base_rating: float = ELO_BASE_RATING,
     num_levels: int = DEFAULT_NUM_LEVELS,
+    num_opponents_per_checkpoint: int = DEFAULT_NUM_OPPONENTS_PER_CHECKPOINT,
     rng: np.random.Generator | None = None,
     log_fn=print,
 ) -> dict[int, Path]:
@@ -65,6 +66,10 @@ def finalize_levels(
         k_factor: Eloの更新幅係数。
         base_rating: Eloの初期レーティング。
         num_levels: 選定するレベル数（レベル2から始まる）。
+        num_opponents_per_checkpoint: 対戦カードサンプリングの、1チェックポイントあたりの
+            対戦相手数の上限（`checkpoint_eval.sample_matchups`参照）。チェックポイント数が
+            多い場合、総対局数（≈チェックポイント数×この値×`games_per_matchup`/2）を
+            抑えるために小さくする。
         rng: 乱数生成器。省略時は新規生成する。
         log_fn: 進捗ログの出力先関数。
 
@@ -86,6 +91,7 @@ def finalize_levels(
         puct_c,
         k_factor,
         base_rating,
+        num_opponents_per_checkpoint,
     )
     for checkpoint_id, rating in sorted(ratings.items(), key=lambda item: item[1]):
         log_fn(f"  rating={rating:.1f} {checkpoint_id}")
@@ -118,6 +124,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--onnx-root", type=Path, default=DEFAULT_ONNX_ROOT)
     parser.add_argument("--num-simulations", type=int, default=MCTS_SIMULATIONS_PER_MOVE)
     parser.add_argument("--games-per-matchup", type=int, default=GAMES_PER_MATCHUP)
+    parser.add_argument(
+        "--num-opponents-per-checkpoint", type=int, default=DEFAULT_NUM_OPPONENTS_PER_CHECKPOINT
+    )
+    parser.add_argument(
+        "--checkpoint-stride",
+        type=int,
+        default=1,
+        help="チェックポイント一覧をN個おきに間引いてから評価する(総対局数の抑制用)。",
+    )
     parser.add_argument("--seed", type=int, default=0)
     return parser.parse_args()
 
@@ -128,7 +143,7 @@ def main() -> None:
     `python -m training.finalize_levels --checkpoint-dir training/checkpoints/8 --board-size 8`
     """
     args = _parse_args()
-    checkpoint_paths = sorted(args.checkpoint_dir.glob("game_*.pt"))
+    checkpoint_paths = sorted(args.checkpoint_dir.glob("game_*.pt"))[:: args.checkpoint_stride]
     if not checkpoint_paths:
         raise SystemExit(f"no checkpoints found under {args.checkpoint_dir}")
 
@@ -141,6 +156,7 @@ def main() -> None:
         onnx_root=args.onnx_root,
         num_simulations=args.num_simulations,
         games_per_matchup=args.games_per_matchup,
+        num_opponents_per_checkpoint=args.num_opponents_per_checkpoint,
         rng=rng,
     )
 

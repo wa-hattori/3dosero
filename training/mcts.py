@@ -16,10 +16,21 @@
   値を使う。これは「パス局面のleafを展開しない」という指示は文字通り守りつつ
   （このleaf自身は子を持たない）、実際に評価値を得るための現実的な実装である。
 - `remaining_simulations`（再帰時に残っているべきシミュレーション回数）も
-  SKILL.mdは明示していない。本実装では単純化のため、外側の `mcts_search` に渡された
-  `num_simulations` をそのまま再帰呼び出しに使う（呼び出し側の予算を厳密に消費・
-  分配する会計処理はしない）。`is_game_over` が先にFalseであることを確認済みのため、
-  手番交代後の色には必ず合法手が存在し、再帰は有限の手数で必ず終了する。
+  SKILL.mdは明示していない。**当初は外側の`num_simulations`をそのまま再帰呼び出しに
+  使っていたが、実運用（実際のGPU上での自己対戦・強さ評価）で致命的な問題が判明した
+  ため`PASS_RECURSION_SIMULATION_BUDGET`（目安値4、`config.py`）という独立した小さい
+  固定予算に変更した。** パス局面の再帰探索はそれ自体が`num_simulations`回のシミュ
+  レーションを行い、そのシミュレーションの一部が「さらに別のパス局面」に到達すると
+  同じ規模で再帰する。パス発生率が無視できない盤面（特に盤面が埋まってくる終盤や、
+  探索ノイズ・温度なしの決定論的な強さ評価対局）では、この再帰が
+  `num_simulations`のべき乗オーダーで増大し得ることを実測で確認した
+  （例: 盤面サイズ8の対局1局が数十分単位で停止して見えるほど遅くなるケースが
+  複数回発生した）。`is_game_over`が先にFalseであることを確認済みのため手番交代後の
+  色には必ず合法手が存在し、どの予算でも再帰は必ず有限の手数で終了するが、
+  「有限」であることと「実用的な時間で終わる」ことは別問題である。
+  `PASS_RECURSION_SIMULATION_BUDGET`は自己対戦・評価の両方で共通のデフォルトとして
+  使い、この小さい予算は再帰のたびに引き継がれる（深い再帰でも`num_simulations`に
+  膨れ上がって戻らない）。
 """
 
 from __future__ import annotations
@@ -32,7 +43,12 @@ import torch
 import torch.nn.functional as functional
 
 from training.board_encoding import encode_board
-from training.config import DIRICHLET_ALPHA, DIRICHLET_EPSILON, PUCT_C
+from training.config import (
+    DIRICHLET_ALPHA,
+    DIRICHLET_EPSILON,
+    PASS_RECURSION_SIMULATION_BUDGET,
+    PUCT_C,
+)
 from training.game_rules import (
     apply_move,
     get_valid_moves,
@@ -236,10 +252,10 @@ def _evaluate_leaf(
     color: int,
     network: PolicyValueNetwork,
     board_size: int,
-    num_simulations: int,
     device: torch.device,
     puct_c: float,
     rng: np.random.Generator,
+    pass_recursion_budget: int = PASS_RECURSION_SIMULATION_BUDGET,
 ) -> float:
     """選択で辿り着いたleafを「展開 + 評価」し、`color` 視点の評価値を返す。
 
@@ -249,10 +265,13 @@ def _evaluate_leaf(
         color: `node` の手番の色。
         network: 評価に使う方策/価値ネットワーク。
         board_size: 盤面の1辺のマス数。
-        num_simulations: パス局面の再帰探索に使うシミュレーション回数。
         device: 推論を実行するデバイス。
         puct_c: PUCT定数。
         rng: 乱数生成器。
+        pass_recursion_budget: パス局面の再帰探索に使うシミュレーション回数。
+            `num_simulations`をそのまま使うと再帰が`num_simulations`のべき乗
+            オーダーで増大しうるため、独立した小さい固定予算にする
+            （モジュールdocstring参照）。
 
     Returns:
         `color` 視点の評価値（`[-1, 1]` の範囲を想定）。
@@ -263,16 +282,20 @@ def _evaluate_leaf(
     if not has_valid_move(board, color, board_size):
         # パス局面: このleaf自身は展開せず、手番だけ交代して再帰的に評価する。
         # is_game_over が False だったため、交代後の色には必ず合法手がある。
+        # 予算は num_simulations ではなく pass_recursion_budget を使い、かつ
+        # 再帰呼び出しにも同じ小さい予算を引き継ぐことで、深い再帰でも
+        # num_simulations に膨れ上がらないようにする。
         nested_root = _run_simulations(
             board,
             opposite_color(color),
             network,
             board_size,
-            num_simulations,
+            pass_recursion_budget,
             device,
             puct_c=puct_c,
             add_noise=False,
             rng=rng,
+            pass_recursion_budget=pass_recursion_budget,
         )
         return -nested_root.mean_value
 
@@ -293,6 +316,7 @@ def _run_simulations(
     rng: np.random.Generator,
     dirichlet_alpha: float = DIRICHLET_ALPHA,
     dirichlet_epsilon: float = DIRICHLET_EPSILON,
+    pass_recursion_budget: int = PASS_RECURSION_SIMULATION_BUDGET,
 ) -> MCTSNode:
     """`num_simulations` 回のMCTSシミュレーションを実行し、探索済みルートを返す。
 
@@ -311,6 +335,9 @@ def _run_simulations(
         rng: 乱数生成器。
         dirichlet_alpha: ルートに加えるDirichletノイズの集中度パラメータ。
         dirichlet_epsilon: ルートに加えるDirichletノイズの混合比率。
+        pass_recursion_budget: パス局面に遭遇した際の再帰探索に使う、
+            `num_simulations`とは独立した小さいシミュレーション予算
+            （モジュールdocstring参照）。
 
     Returns:
         探索済みのルートノード（`visit_count`/`value_sum` が更新済み）。
@@ -334,7 +361,7 @@ def _run_simulations(
             path.append(node)
 
         value = _evaluate_leaf(
-            node, board, color, network, board_size, num_simulations, device, puct_c, rng
+            node, board, color, network, board_size, device, puct_c, rng, pass_recursion_budget
         )
 
         for path_node in reversed(path):
@@ -357,6 +384,7 @@ def mcts_search(
     dirichlet_epsilon: float = DIRICHLET_EPSILON,
     add_noise: bool = True,
     rng: np.random.Generator | None = None,
+    pass_recursion_budget: int = PASS_RECURSION_SIMULATION_BUDGET,
 ) -> dict[Move, float]:
     """PUCTベースのMCTSを実行し、ルートの正規化済み訪問回数分布を返す。
 
@@ -376,6 +404,9 @@ def mcts_search(
         add_noise: `True` ならルートにDirichletノイズを加える（自己対戦時のみ。
             強さ評価やパス局面からの再帰探索では `False` にする）。
         rng: 乱数生成器。省略時は新規生成する。
+        pass_recursion_budget: パス局面に遭遇した際の再帰探索に使う、
+            `num_simulations`とは独立した小さいシミュレーション予算
+            （モジュールdocstring参照。既定値は`config.PASS_RECURSION_SIMULATION_BUDGET`）。
 
     Returns:
         `{move: normalized_visit_count}`。合法手だけがキーに含まれる。
@@ -393,5 +424,6 @@ def mcts_search(
         rng,
         dirichlet_alpha,
         dirichlet_epsilon,
+        pass_recursion_budget,
     )
     return normalized_visit_counts(root)

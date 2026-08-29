@@ -26,3 +26,7 @@ def test_elo_defaults_match_skill_md_table() -> None:
     assert config.GAMES_PER_MATCHUP == 4
     assert config.ELO_BASE_RATING == 1500
     assert config.ELO_K_FACTOR == 32
+
+
+def test_pass_recursion_budget_matches_skill_md_table() -> None:
+    assert config.PASS_RECURSION_SIMULATION_BUDGET == 4
