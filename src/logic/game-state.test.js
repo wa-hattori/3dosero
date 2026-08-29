@@ -98,3 +98,15 @@ test('getNextTurn respects a smaller boardSize', () => {
   const board = createInitialBoard(boardSize);
   assert.equal(getNextTurn(board, BLACK, boardSize), WHITE);
 });
+
+test('isGameOver respects a boardSize of 6', () => {
+  const boardSize = 6;
+  const board = createInitialBoard(boardSize);
+  assert.equal(isGameOver(board, boardSize), false);
+});
+
+test('getNextTurn respects a boardSize of 6', () => {
+  const boardSize = 6;
+  const board = createInitialBoard(boardSize);
+  assert.equal(getNextTurn(board, BLACK, boardSize), WHITE);
+});
