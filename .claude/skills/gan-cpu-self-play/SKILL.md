@@ -70,13 +70,15 @@ function encode_board(board, to_move, board_size):
 | `ELO_BASE_RATING` | 1500 |
 | `ELO_K_FACTOR` | 32 |
 | `PASS_RECURSION_SIMULATION_BUDGET` | 4 |
+| `PASS_RECURSION_MAX_DEPTH` | 3 |
 
 ## MCTS（探索、疑似コード）
 
 標準的なPUCTベースのMCTS。
 
 ```
-function mcts_search(root_board, root_color, network, num_simulations):
+function mcts_search(root_board, root_color, network, num_simulations,
+                      pass_recursion_depth=PASS_RECURSION_MAX_DEPTH):
   root = Node(prior=1.0)
   expand(root, root_board, root_color, network)
   add_dirichlet_noise(root)  # ルートのみに探索ノイズを加える
@@ -96,13 +98,28 @@ function mcts_search(root_board, root_color, network, num_simulations):
       value = terminal_value(board, color)
     elif not has_valid_move(board, color):
       # パス局面: 展開せずに手番だけ交代して評価する。
-      # 注意: ここで外側のnum_simulationsをそのまま使うと、パス発生率が
+      # 注意1(幅): ここで外側のnum_simulationsをそのまま使うと、パス発生率が
       # 無視できない局面(盤面が埋まってくる終盤、探索ノイズ・温度なしの
       # 決定論的な対局)で再帰がnum_simulationsのべき乗オーダーに膨れ上がり、
       # 1局が数十分単位で停止して見えるほど遅くなることを実測で確認した。
       # 独立した小さい固定予算PASS_RECURSION_SIMULATION_BUDGET(目安値4)を使い、
       # 再帰のたびにこの小さい予算を引き継ぐ(num_simulationsに戻さない)。
-      value = -mcts_search(board, opposite(color), network, PASS_RECURSION_SIMULATION_BUDGET)
+      # 注意2(深さ): 幅を固定するだけでは再帰の「深さ」は制限されない。
+      # パス局面が連鎖する盤面(特に盤面サイズが小さいほど終盤に頻発しうる)では
+      # この再帰が何段も連鎖し、深さdで最悪 PASS_RECURSION_SIMULATION_BUDGET**d
+      # 回のネットワーク評価に達しうる(実測: 盤面サイズ4で9段以上連鎖し1局が
+      # 20分以上停止して見えた)。そのためPASS_RECURSION_MAX_DEPTH(目安値3)で
+      # 深さにも上限を設け、使い切ったら入れ子探索をせず単発のnetwork.predict
+      # で代用する(下のpass_recursion_depth引数)。
+      if pass_recursion_depth <= 0:
+        _, value = network.predict(encode_board(board, opposite(color), board_size))
+        value = -value
+      else:
+        value = -mcts_search(
+          board, opposite(color), network,
+          num_simulations=PASS_RECURSION_SIMULATION_BUDGET,
+          pass_recursion_depth=pass_recursion_depth - 1,
+        )
     else:
       policy, value = network.predict(encode_board(board, color, board_size))
       expand(node, board, color, policy)  # get_valid_moves で得た合法手のみを子にする
@@ -236,7 +253,7 @@ function evaluate_checkpoints(checkpoints, games_per_matchup):
 3. **引き分け**: `winner` が `None` の場合、教師信号の価値は `0.0` とする。
 4. **盤面サイズごとに重みを共有しない**: 4/6/8はそれぞれ独立したモデルインスタンス・チェックポイント系列・レベル選定として扱う。
 5. **方策ヘッドの非合法手への漏れ**: `expand` は必ず `get_valid_moves` で得た合法手だけを子ノードにし、教師信号（`visit_counts`）も合法手にしか立たないようにする。
-6. **パス局面の再帰探索コスト**: MCTS節に記載の通り、パス局面の再帰評価に外側の`num_simulations`をそのまま使うと、パス発生率が無視できない局面で再帰がべき乗オーダーに膨れ上がる（実測で1局が数十分単位に達した）。必ず独立した小さい`PASS_RECURSION_SIMULATION_BUDGET`を使い、ネスト先にも同じ小さい予算を引き継ぐこと。
+6. **パス局面の再帰探索コスト**: MCTS節に記載の通り、パス局面の再帰評価に外側の`num_simulations`をそのまま使うと、パス発生率が無視できない局面で再帰がべき乗オーダーに膨れ上がる（実測で1局が数十分単位に達した）。必ず独立した小さい`PASS_RECURSION_SIMULATION_BUDGET`を使い、ネスト先にも同じ小さい予算を引き継ぐこと。**さらに、幅（1段あたりのシミュレーション回数）を固定するだけでは再帰の深さは制限されない。** パス局面が連鎖する盤面（特に盤面サイズが小さいほど終盤に頻発しうる）では再帰が何段も連鎖しうる（実測: 盤面サイズ4で9段以上連鎖し1局が20分以上停止）。`PASS_RECURSION_MAX_DEPTH`で深さにも上限を設け、使い切ったら入れ子探索をせず単発の`network.predict`で代用すること。
 
 ## 参照
 

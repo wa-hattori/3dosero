@@ -411,3 +411,59 @@ def test_evaluate_leaf_pass_branch_uses_pass_recursion_budget_not_num_simulation
     assert len(recorded_num_simulations) >= 1
     assert all(n == 4 for n in recorded_num_simulations)
     assert huge_num_simulations_that_should_never_be_used not in recorded_num_simulations
+
+
+def test_evaluate_leaf_pass_branch_recursion_depth_is_bounded(
+    cuda_device: torch.device, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """回帰テスト: パス局面が連鎖し続ける病的な盤面でも、再帰の"深さ"が
+    `pass_recursion_depth_remaining` で有限に打ち切られ、実用的な時間で終わることを
+    確認する。
+
+    実際の自己対戦（盤面サイズ4）で、終盤にパス局面が9段以上連鎖し、1局が20分以上
+    停止して見える事例が実測された（`py-spy dump`で`_evaluate_leaf`→
+    `_run_simulations`の呼び出しが9回連続でスタックに積まれていることを確認）。
+    `pass_recursion_budget`（1段あたりの幅）を固定するだけでは深さ自体は制限されず、
+    深さ`d`で最悪`pass_recursion_budget ** d`回のネットワーク評価に達しうる。
+
+    ここでは`has_valid_move`/`is_game_over`を常に「パス」を返すよう差し替え、
+    深さに上限がなければ理論上終わらない状況を作る。それでも`predict`の呼び出し
+    回数が小さい有限値に収まることを検証する。
+    """
+    import training.mcts as mcts_module
+
+    monkeypatch.setattr(mcts_module, "is_game_over", lambda board, board_size: False)
+    monkeypatch.setattr(mcts_module, "has_valid_move", lambda board, color, board_size: False)
+
+    predict_call_count = 0
+    original_predict = mcts_module.predict
+
+    def counting_predict(*args, **kwargs):
+        nonlocal predict_call_count
+        predict_call_count += 1
+        return original_predict(*args, **kwargs)
+
+    monkeypatch.setattr(mcts_module, "predict", counting_predict)
+
+    board_size = TEST_BOARD_SIZE
+    board = create_initial_board(board_size)
+    network = make_small_network(board_size).to(cuda_device)
+    node = MCTSNode(prior=1.0)
+    rng = np.random.default_rng(3)
+
+    value = _evaluate_leaf(
+        node,
+        board,
+        BLACK,
+        network,
+        board_size,
+        device=cuda_device,
+        puct_c=1.5,
+        rng=rng,
+        pass_recursion_budget=4,
+    )
+
+    assert -1.0 <= value <= 1.0
+    # 深さの上限(既定値 PASS_RECURSION_MAX_DEPTH=3)がなければ、この呼び出しは
+    # 理論上終わらない。有限の小さい回数(目安値なら100回未満)で終わることが本質。
+    assert predict_call_count < 500
