@@ -4,6 +4,7 @@ import { getNextTurn, getWinner, countStones } from './logic/game-state.js';
 import { chooseRandomMove, RANDOM_CPU_LEVEL } from './logic/cpu.js';
 import { loadModelSession } from './ai/model-loader.js';
 import { chooseGanMove } from './ai/gan-cpu.js';
+import { submitMove, subscribeToRoom } from './net/room-sync.js';
 import { createSceneManager } from './render/scene-manager.js';
 import { createCameraControls } from './render/camera-controls.js';
 import { createBoardView } from './render/board-view.js';
@@ -73,10 +74,14 @@ createMuteToggle(uiOverlay, (muted) => {
 createVersionBadge(uiOverlay);
 
 /**
- * 選択された対戦モード・盤面サイズ・CPUレベルで対局を開始する。3Dシーン・ゲーム状態・UIを一式構築する。
- * @param {{ battleMode: string, boardSize: number, cpuLevel: number | null }} selection - スタート画面での選択内容
+ * 選択された対戦モード・盤面サイズ・CPUレベル（・オンライン接続情報）で対局を開始する。
+ * 3Dシーン・ゲーム状態・UIを一式構築する。オンライン対戦モードでは、盤面の実体は
+ * Firestore側にあり、ここでの`board`/`currentTurn`等はその購読結果のミラーに過ぎない
+ * （[online-multiplayer](../.claude/skills/online-multiplayer/SKILL.md)参照）。
+ * @param {{ battleMode: string, boardSize: number, cpuLevel: number | null, online: { roomId: string, color: number } | null }} selection -
+ *   スタート画面での選択内容
  */
-const startGame = ({ battleMode, boardSize, cpuLevel }) => {
+const startGame = ({ battleMode, boardSize, cpuLevel, online }) => {
   heroScene.stop();
   heroCanvas.style.display = 'none';
   bgmPlayer.play('battle');
@@ -100,12 +105,17 @@ const startGame = ({ battleMode, boardSize, cpuLevel }) => {
   let winner = null;
   let activeLayer = null;
 
+  /** オンライン対戦での自分の色。オンライン対戦以外では`null`。 */
+  const myOnlineColor = battleMode === 'online' ? online.color : null;
+
   const isCpuTurn = () => battleMode === 'cpu' && currentTurn === CPU_COLOR;
+  const isWaitingForOpponentOnline = () =>
+    battleMode === 'online' && currentTurn !== myOnlineColor;
 
   const getVisibleMoves = () => {
-    // CPUの手番中は人間が代わりに着手できないよう、ハイライトを空にして
-    // クリック対象を無くす（着手可能マス一覧自体は内部的に保持したまま）。
-    if (isCpuTurn()) return [];
+    // CPUの手番中・オンライン対戦で相手の手番中は、代わりに着手できないよう
+    // ハイライトを空にしてクリック対象を無くす（着手可能マス一覧自体は内部的に保持したまま）。
+    if (isCpuTurn() || isWaitingForOpponentOnline()) return [];
     return activeLayer === null ? validMoves : validMoves.filter(([, , z]) => z === activeLayer);
   };
 
@@ -117,6 +127,24 @@ const startGame = ({ battleMode, boardSize, cpuLevel }) => {
   };
 
   render();
+
+  if (battleMode === 'online') {
+    // オンライン対戦では盤面の実体をFirestore側に置き、この購読が状態更新の
+    // 唯一の経路になる（自分の着手の反映も、相手の着手の反映も同じ経路を通る）。
+    subscribeToRoom(online.roomId, (room) => {
+      board = room.board;
+      currentTurn = room.currentTurn;
+      isOver = room.status === 'finished';
+      winner = isOver ? room.winner : null;
+      validMoves = isOver ? [] : getValidMoves(board, currentTurn, boardSize);
+
+      render();
+
+      if (isOver) {
+        createEndScreen(uiOverlay, { winner, counts: countStones(board) });
+      }
+    });
+  }
 
   const scheduleCpuMoveIfNeeded = () => {
     if (!isCpuTurn()) return;
@@ -160,9 +188,27 @@ const startGame = ({ battleMode, boardSize, cpuLevel }) => {
     scheduleCpuMoveIfNeeded();
   };
 
+  /**
+   * オンライン対戦での着手をFirestoreに送信する。盤面・手番の更新は
+   * `subscribeToRoom`のコールバック経由で反映されるため、ここではローカルの
+   * 状態を直接変更しない（両クライアントの状態が食い違わないようにするため）。
+   * @param {[number, number, number]} move - 着手する座標
+   */
+  const submitOnlineMove = async ([x, y, z]) => {
+    try {
+      await submitMove({ roomId: online.roomId, board, boardSize, color: myOnlineColor, x, y, z });
+    } catch (error) {
+      console.error('着手の送信に失敗しました', error);
+    }
+  };
+
   const handleMoveSelected = (instanceIndex) => {
     const move = getVisibleMoves()[instanceIndex];
     if (move === undefined) return;
+    if (battleMode === 'online') {
+      submitOnlineMove(move);
+      return;
+    }
     applyMoveAndAdvance(move);
   };
 

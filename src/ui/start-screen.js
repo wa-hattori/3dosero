@@ -1,11 +1,28 @@
-import { SUPPORTED_BOARD_SIZES } from '../logic/board.js';
+import { SUPPORTED_BOARD_SIZES, BLACK, WHITE } from '../logic/board.js';
 import { RANDOM_CPU_LEVEL, MAX_CPU_LEVEL } from '../logic/cpu.js';
 import { playClickSound } from '../audio/click-sound.js';
+import { isFirebaseConfigured } from '../net/firebase-config.js';
+import {
+  RoomNotFoundError,
+  RoomNotJoinableError,
+  createRoom,
+  joinRoom,
+  subscribeToRoom,
+} from '../net/room-sync.js';
+import { cancelRandomMatch, requestRandomMatch, subscribeToTicket } from '../net/matchmaking.js';
+import { ROOM_CODE_LENGTH, isValidRoomCode } from '../net/room-code.js';
 
 const BATTLE_MODES = [
   { id: 'cpu', label: 'CPU対戦' },
   { id: 'local', label: '2人対戦' },
-  { id: 'online', label: 'オンライン対戦', disabled: true },
+  { id: 'online', label: 'オンライン対戦' },
+];
+
+/** オンライン対戦の参加方法。 */
+const ONLINE_METHODS = [
+  { id: 'create', label: '部屋を作る' },
+  { id: 'join', label: 'コードで参加' },
+  { id: 'random', label: 'ランダムマッチング' },
 ];
 
 /**
@@ -21,11 +38,14 @@ const cpuLevelLabel = (level) => {
 };
 
 /**
- * 対局開始前に表示する、対戦モード→盤面サイズ→（CPU対戦のみ）難易度の選択画面を生成する。
- * 選択が完了すると自身をDOMから取り除き、`onStart` を呼ぶ。
+ * 対局開始前に表示する、対戦モード→盤面サイズ→（モードに応じて）難易度/オンライン接続の
+ * 選択画面を生成する。オンライン対戦では、この画面の中で実際に部屋の作成・参加・
+ * ランダムマッチングまで完了させてから `onStart` を呼ぶ（対局画面側は接続済みの
+ * 状態を受け取るだけでよい）。選択が完了すると自身をDOMから取り除く。
  * @param {HTMLElement} container - 追加先要素
- * @param {(selection: { battleMode: string, boardSize: number, cpuLevel: number | null }) => void} onStart -
- *   選択完了時に呼ばれる。`cpuLevel` はCPU対戦モード以外では `null`
+ * @param {(selection: { battleMode: string, boardSize: number, cpuLevel: number | null, online: { roomId: string, color: number } | null }) => void} onStart -
+ *   選択完了時に呼ばれる。`cpuLevel` はCPU対戦モード以外では `null`。`online` は
+ *   オンライン対戦モードでの接続確立後のみ非`null`（`roomId`と自分の色）
  * @param {() => void} [onFirstInteraction] - モード選択ボタンの最初のクリック時に呼ばれる。
  *   `<audio>.play()`はブラウザの自動再生ポリシー上、ボタン自身のクリックハンドラ内など
  *   ユーザー操作に直接応答する形で同期的に呼ばれた場合に最も確実に許可される
@@ -48,6 +68,10 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
   buttonRow.className = 'start-screen-modes';
   overlay.appendChild(buttonRow);
 
+  const errorMessage = document.createElement('p');
+  errorMessage.className = 'start-screen-error';
+  overlay.appendChild(errorMessage);
+
   const backButton = document.createElement('button');
   backButton.type = 'button';
   backButton.className = 'start-screen-back';
@@ -59,8 +83,30 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
   let selectedBoardSize = null;
   // 「戻る」ボタンは1つ前のステップに戻す必要があるため、現在のステップを覚えておく。
   let currentStep = 'mode';
+  // オンライン対戦の待機中(部屋作成・ランダムマッチング)はFirestoreを購読するため、
+  // 別ステップに移動する・画面を閉じる際に必ず購読解除する。
+  let activeUnsubscribe = null;
+  let activeTicketId = null;
+
+  const stopActiveSubscription = () => {
+    if (activeUnsubscribe) {
+      activeUnsubscribe();
+      activeUnsubscribe = null;
+    }
+  };
+
+  const cancelActiveTicketIfAny = () => {
+    if (!activeTicketId) return;
+    const ticketId = activeTicketId;
+    activeTicketId = null;
+    cancelRandomMatch(ticketId).catch((error) => {
+      console.error('ランダムマッチングのキャンセルに失敗しました', error);
+    });
+  };
 
   const dispose = () => {
+    stopActiveSubscription();
+    cancelActiveTicketIfAny();
     overlay.remove();
   };
 
@@ -68,9 +114,18 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     buttonRow.replaceChildren();
   };
 
-  const finishSelection = (cpuLevel) => {
+  const showError = (message) => {
+    errorMessage.textContent = message;
+  };
+
+  const clearError = () => {
+    errorMessage.textContent = '';
+  };
+
+  const finishSelection = ({ cpuLevel = null, online = null } = {}) => {
+    stopActiveSubscription();
     dispose();
-    onStart({ battleMode: selectedBattleMode, boardSize: selectedBoardSize, cpuLevel });
+    onStart({ battleMode: selectedBattleMode, boardSize: selectedBoardSize, cpuLevel, online });
   };
 
   const showCpuLevelStep = () => {
@@ -86,7 +141,7 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
       button.textContent = cpuLevelLabel(level);
       button.addEventListener('click', () => {
         playClickSound();
-        finishSelection(level);
+        finishSelection({ cpuLevel: level });
       });
       buttonRow.appendChild(button);
     }
@@ -97,6 +152,7 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     backButton.hidden = false;
     backButton.textContent = '← モード選択に戻る';
     currentStep = 'boardSize';
+    clearError();
     clearButtons();
 
     for (const boardSize of SUPPORTED_BOARD_SIZES) {
@@ -110,7 +166,137 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
           showCpuLevelStep();
           return;
         }
-        finishSelection(null);
+        if (selectedBattleMode === 'online') {
+          showOnlineMethodStep();
+          return;
+        }
+        finishSelection();
+      });
+      buttonRow.appendChild(button);
+    }
+  };
+
+  const showOnlineWaitingStep = (message) => {
+    subtitle.textContent = message;
+    backButton.hidden = false;
+    backButton.textContent = '← キャンセル';
+    currentStep = 'onlineWaiting';
+    clearButtons();
+  };
+
+  const startCreateRoom = async () => {
+    clearError();
+    showOnlineWaitingStep('部屋を作成しています…');
+    try {
+      const { roomId, color } = await createRoom(selectedBoardSize);
+      showOnlineWaitingStep(
+        `ルームコード: ${roomId}\nこのコードを相手に伝えてください。相手の参加を待っています…`,
+      );
+      activeUnsubscribe = subscribeToRoom(roomId, (room) => {
+        if (room.status !== 'in_progress') return;
+        stopActiveSubscription();
+        finishSelection({ online: { roomId, color } });
+      });
+    } catch (error) {
+      console.error('部屋の作成に失敗しました', error);
+      showOnlineMethodStep();
+      showError('部屋の作成に失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const startRandomMatch = async () => {
+    clearError();
+    showOnlineWaitingStep('対戦相手を探しています…');
+    try {
+      const { ticketId, roomId } = await requestRandomMatch(selectedBoardSize);
+      if (roomId) {
+        // 自分が既存の待機チケットを見つけてマッチさせた側 = 白番。
+        finishSelection({ online: { roomId, color: WHITE } });
+        return;
+      }
+      activeTicketId = ticketId;
+      activeUnsubscribe = subscribeToTicket(ticketId, (ticket) => {
+        if (!ticket.roomId) return;
+        // 他プレイヤーに見つけられてマッチした側 = 黒番。マッチ成立後はもう
+        // キャンセル対象のチケットではないため、dispose時の誤キャンセルを防ぐ。
+        activeTicketId = null;
+        stopActiveSubscription();
+        finishSelection({ online: { roomId: ticket.roomId, color: BLACK } });
+      });
+    } catch (error) {
+      console.error('ランダムマッチングに失敗しました', error);
+      showOnlineMethodStep();
+      showError('ランダムマッチングに失敗しました。もう一度お試しください。');
+    }
+  };
+
+  const showOnlineJoinStep = () => {
+    subtitle.textContent = 'ルームコードを入力してください';
+    backButton.hidden = false;
+    backButton.textContent = '← 参加方法選択に戻る';
+    currentStep = 'onlineJoin';
+    clearError();
+    clearButtons();
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.maxLength = ROOM_CODE_LENGTH;
+    input.placeholder = '例: AB23CD';
+    input.className = 'start-screen-room-code-input';
+    buttonRow.appendChild(input);
+
+    const submitButton = document.createElement('button');
+    submitButton.type = 'button';
+    submitButton.textContent = '参加する';
+    submitButton.addEventListener('click', async () => {
+      playClickSound();
+      if (!isValidRoomCode(input.value)) {
+        showError('ルームコードの形式が正しくありません。');
+        return;
+      }
+      clearError();
+      submitButton.disabled = true;
+      try {
+        const { roomId, color } = await joinRoom(input.value);
+        finishSelection({ online: { roomId, color } });
+      } catch (error) {
+        submitButton.disabled = false;
+        if (error instanceof RoomNotFoundError) {
+          showError('その部屋は見つかりませんでした。');
+          return;
+        }
+        if (error instanceof RoomNotJoinableError) {
+          showError('その部屋には参加できません（満室、または対局中です）。');
+          return;
+        }
+        console.error('部屋への参加に失敗しました', error);
+        showError('部屋への参加に失敗しました。もう一度お試しください。');
+      }
+    });
+    buttonRow.appendChild(submitButton);
+  };
+
+  const showOnlineMethodStep = () => {
+    subtitle.textContent = 'オンライン対戦の参加方法を選んでください';
+    backButton.hidden = false;
+    backButton.textContent = '← 盤面サイズ選択に戻る';
+    currentStep = 'onlineMethod';
+    clearError();
+    clearButtons();
+
+    if (!isFirebaseConfigured()) {
+      showError('オンライン対戦は準備中です。しばらくお待ちください。');
+      return;
+    }
+
+    const handlers = { create: startCreateRoom, join: showOnlineJoinStep, random: startRandomMatch };
+    for (const method of ONLINE_METHODS) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = method.label;
+      button.addEventListener('click', () => {
+        playClickSound();
+        handlers[method.id]();
       });
       buttonRow.appendChild(button);
     }
@@ -120,13 +306,13 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     subtitle.textContent = '対戦モードを選んでください';
     backButton.hidden = true;
     currentStep = 'mode';
+    clearError();
     clearButtons();
 
     for (const mode of BATTLE_MODES) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = mode.disabled ? `${mode.label}（近日公開）` : mode.label;
-      button.disabled = Boolean(mode.disabled);
+      button.textContent = mode.label;
       button.addEventListener('click', () => {
         onFirstInteraction?.();
         playClickSound();
@@ -139,8 +325,18 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
 
   backButton.addEventListener('click', () => {
     playClickSound();
-    if (currentStep === 'cpuLevel') {
+    if (currentStep === 'cpuLevel' || currentStep === 'onlineMethod') {
       showBoardSizeStep();
+      return;
+    }
+    if (currentStep === 'onlineJoin') {
+      showOnlineMethodStep();
+      return;
+    }
+    if (currentStep === 'onlineWaiting') {
+      stopActiveSubscription();
+      cancelActiveTicketIfAny();
+      showOnlineMethodStep();
       return;
     }
     selectedBattleMode = null;
