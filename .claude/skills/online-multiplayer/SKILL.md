@@ -29,11 +29,11 @@ CLAUDE.mdの「オンライン対戦」に対応する具体的な設計。**サ
 rooms/{roomId}
   boardSize: number            # 4 | 6 | 8
   board: number[]               # index_of(x,y,z,boardSize)順のフラット配列。0=空 1=黒 2=白
-  players: { black: uid, white: uid | null }
-  currentTurn: 'black' | 'white'
+  players: { black: uid, white: uid | null }   # キー名は固定。値は各プレイヤーのuid
+  currentTurn: number           # src/logic/board.jsのBLACK(1) | WHITE(2)をそのまま保存
   status: 'waiting' | 'in_progress' | 'finished'
-  winner: 'black' | 'white' | 'draw' | null
-  lastMove: { x, y, z, color } | null   # 直前の着手(受信側のアニメーション・ハイライト用)
+  winner: number | null         # BLACK(1) | WHITE(2) | null(引き分け、またはstatusがfinishedでなければ「未定」)
+  lastMove: { x, y, z, color } | null   # colorもBLACK(1)|WHITE(2)。直前の着手(受信側のアニメーション・ハイライト用)
   createdAt: serverTimestamp
   updatedAt: serverTimestamp
 
@@ -55,7 +55,7 @@ function createRoom(boardSize, myUid):
   write rooms/{roomId} = {
     boardSize, board: create_initial_board(boardSize),
     players: { black: myUid, white: null },
-    currentTurn: 'black', status: 'waiting', winner: null, lastMove: null,
+    currentTurn: BLACK, status: 'waiting', winner: null, lastMove: null,
   }
   return roomId
 
@@ -88,7 +88,7 @@ function requestRandomMatch(boardSize, myUid):
       roomId = generate_room_code()
       tx.write(rooms/{roomId}, { boardSize, board: create_initial_board(boardSize),
         players: { black: candidate.uid, white: myUid },
-        currentTurn: 'black', status: 'in_progress', winner: null, lastMove: null })
+        currentTurn: BLACK, status: 'in_progress', winner: null, lastMove: null })
       tx.update(candidate.ref, { status: 'matched', roomId })
       tx.update(myTicket.ref, { status: 'matched', roomId })
       return true
@@ -111,11 +111,15 @@ function submitMove(roomId, myColor, x, y, z, currentBoard, boardSize):
     raise IllegalMoveError   # 送信前にローカルで弾く(信頼境界の節を参照)
   nextBoard = applyMove(currentBoard, x, y, z, myColor, boardSize)
   nextTurn = getNextTurn(nextBoard, myColor, boardSize)   # 相手がパスなら手番はそのまま自分に戻る
+                                                            # 終局なら null が返る(getNextTurnの契約)
+  isOver = (nextTurn == null)
   update rooms/{roomId}: {
-    board: nextBoard, currentTurn: nextTurn, lastMove: { x, y, z, color: myColor },
+    board: nextBoard,
+    currentTurn: isOver ? myColor : nextTurn,   # 終局後もフィールドとしては値を残す(未使用)
+    status: isOver ? 'finished' : 'in_progress',
+    winner: isOver ? getWinner(nextBoard) : null,
+    lastMove: { x, y, z, color: myColor },
   }
-  if isGameOver(nextBoard, boardSize):
-    update rooms/{roomId}: { status: 'finished', winner: getWinner(nextBoard) }
 ```
 
 盤面適用・手番判定・終局判定は`src/logic/`（`flip-rule.js`/`game-state.js`）を**そのまま再利用**し、オンライン対戦用に別ロジックを作らない（[othello-3d-flip-rule](../othello-3d-flip-rule/SKILL.md)が唯一の正本であることに変わりはない）。`src/net/`は「いつ・何を読み書きするか」だけを扱う。
@@ -135,10 +139,11 @@ function submitMove(roomId, myColor, x, y, z, currentBoard, boardSize):
 `src/logic/`（純粋関数・DOM/three/非同期I/O禁止）とも`src/ai/`（GAN CPU推論、onnxruntime-web依存）とも独立したモジュール群にする。
 
 - `src/net/room-code.js` — ルームコードの生成・書式検証。**純粋関数、Firebase依存なし**。Node標準テストで検証する。
+- `src/net/board-serialization.js` — 盤面（`Int8Array`）とFirestoreの配列表現の相互変換。**純粋関数、Firebase依存なし**。Node標準テストで検証する。
 - `src/net/firebase-init.js` — Firebase App/Firestore/Authの初期化（CDN経由のESモジュール）。設定値は`src/net/firebase-config.js`から読む。
 - `src/net/firebase-config.js` — プロジェクトごとのFirebase設定値（`apiKey`等）。**実際の値はユーザーがFirebaseコンソールでプロジェクトを作成した後に埋める**。プレースホルダーの状態でコミットする。
 - `src/net/room-sync.js` — `createRoom`/`joinRoom`/`submitMove`/`subscribeToRoom`。Firestoreへの実際の読み書き（非同期I/O、自動テスト対象外は`testing.md`の方針に準ずる）。
-- `src/net/matchmaking.js` — `requestRandomMatch`/`cancelRandomMatch`。トランザクションによる排他制御を含む。
+- `src/net/matchmaking.js` — `requestRandomMatch`/`subscribeToTicket`/`cancelRandomMatch`。トランザクションによる排他制御を含む。
 
 ## 参照
 

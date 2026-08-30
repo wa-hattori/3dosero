@@ -35,9 +35,11 @@ service cloud.firestore {
       }
 
       function isJoiningOrMyTurn(before, after) {
+        // currentTurnはsrc/logic/board.jsのBLACK(1)/WHITE(2)をそのまま保存している
+        // (ルール言語からはJSの定数をimportできないため、ここでは数値リテラルで比較する)。
         let isJoining = before.players.white == null && after.players.white == request.auth.uid;
-        let isMyTurn = (before.currentTurn == 'black' && before.players.black == request.auth.uid)
-          || (before.currentTurn == 'white' && before.players.white == request.auth.uid);
+        let isMyTurn = (before.currentTurn == 1 && before.players.black == request.auth.uid)
+          || (before.currentTurn == 2 && before.players.white == request.auth.uid);
         return isJoining || isMyTurn;
       }
     }
