@@ -31,6 +31,22 @@
   `PASS_RECURSION_SIMULATION_BUDGET`は自己対戦・評価の両方で共通のデフォルトとして
   使い、この小さい予算は再帰のたびに引き継がれる（深い再帰でも`num_simulations`に
   膨れ上がって戻らない）。
+- **上記の固定予算化だけでは、再帰の「深さ」自体は制限されない。** パス局面が連鎖する
+  盤面（特に盤面サイズが小さいほど終盤の空きマスが少なく、双方の合法手が頻繁に尽きる
+  傾向がある）では、`_evaluate_leaf`のパス分岐が入れ子の`_run_simulations`を呼び、
+  その中の各シミュレーションがさらに別のパス局面に到達してまた入れ子の
+  `_run_simulations`を呼ぶ、という再帰が何段も連鎖しうる。1段あたりの幅を
+  `PASS_RECURSION_SIMULATION_BUDGET`（例: 4）に固定しても、深さ`d`まで連鎖すれば
+  最悪`PASS_RECURSION_SIMULATION_BUDGET ** d`回のネットワーク評価に達し、深さに
+  上限がなければ実質的に終わらない。実際に盤面サイズ4の自己対戦で、この再帰が
+  9段以上深くなり1局が20分以上停止して見える事例が実測された（`py-spy dump`で
+  `_evaluate_leaf`→`_run_simulations`の呼び出しが9回連続でスタックに積まれている
+  ことを確認）。そのため`PASS_RECURSION_MAX_DEPTH`（目安値3、`config.py`）で再帰の
+  深さそのものにも上限を設け、使い切ったら入れ子の探索をせず単発の
+  `predict`（ネットワークによる価値の一発評価）で代用する。幅・深さの両方を固定
+  予算にすることで、パス局面1回あたりの追加コストは
+  `sum(PASS_RECURSION_SIMULATION_BUDGET ** d for d in range(PASS_RECURSION_MAX_DEPTH + 1))`
+  程度（目安値なら100回未満）に確実に収まる。
 """
 
 from __future__ import annotations
@@ -46,6 +62,7 @@ from training.board_encoding import encode_board
 from training.config import (
     DIRICHLET_ALPHA,
     DIRICHLET_EPSILON,
+    PASS_RECURSION_MAX_DEPTH,
     PASS_RECURSION_SIMULATION_BUDGET,
     PUCT_C,
 )
@@ -256,6 +273,7 @@ def _evaluate_leaf(
     puct_c: float,
     rng: np.random.Generator,
     pass_recursion_budget: int = PASS_RECURSION_SIMULATION_BUDGET,
+    pass_recursion_depth_remaining: int = PASS_RECURSION_MAX_DEPTH,
 ) -> float:
     """選択で辿り着いたleafを「展開 + 評価」し、`color` 視点の評価値を返す。
 
@@ -272,6 +290,9 @@ def _evaluate_leaf(
             `num_simulations`をそのまま使うと再帰が`num_simulations`のべき乗
             オーダーで増大しうるため、独立した小さい固定予算にする
             （モジュールdocstring参照）。
+        pass_recursion_depth_remaining: パス局面の再帰探索があと何段まで許されるか。
+            `0`になったら、それ以上入れ子の探索はせず単発の`predict`で代用する
+            （幅だけでなく深さも有限にする理由はモジュールdocstring参照）。
 
     Returns:
         `color` 視点の評価値（`[-1, 1]` の範囲を想定）。
@@ -280,11 +301,19 @@ def _evaluate_leaf(
         return terminal_value(board, color)
 
     if not has_valid_move(board, color, board_size):
-        # パス局面: このleaf自身は展開せず、手番だけ交代して再帰的に評価する。
+        # パス局面: このleaf自身は展開せず、手番だけ交代して評価する。
         # is_game_over が False だったため、交代後の色には必ず合法手がある。
+        if pass_recursion_depth_remaining <= 0:
+            # 深さ予算を使い切った: これ以上入れ子の探索はせず、単発のネットワーク
+            # 評価だけで評価値を代用する（パス連鎖が続く病的な盤面でも、幅の予算
+            # だけでは再帰の深さが有限にならないため。モジュールdocstring参照）。
+            _, pass_value = predict(network, board, opposite_color(color), board_size, device)
+            return -pass_value
+
         # 予算は num_simulations ではなく pass_recursion_budget を使い、かつ
         # 再帰呼び出しにも同じ小さい予算を引き継ぐことで、深い再帰でも
-        # num_simulations に膨れ上がらないようにする。
+        # num_simulations に膨れ上がらないようにする。深さ予算は1段ごとに
+        # 消費し、使い切ったら上のフォールバックに落ちる。
         nested_root = _run_simulations(
             board,
             opposite_color(color),
@@ -296,6 +325,7 @@ def _evaluate_leaf(
             add_noise=False,
             rng=rng,
             pass_recursion_budget=pass_recursion_budget,
+            pass_recursion_depth_remaining=pass_recursion_depth_remaining - 1,
         )
         return -nested_root.mean_value
 
@@ -317,6 +347,7 @@ def _run_simulations(
     dirichlet_alpha: float = DIRICHLET_ALPHA,
     dirichlet_epsilon: float = DIRICHLET_EPSILON,
     pass_recursion_budget: int = PASS_RECURSION_SIMULATION_BUDGET,
+    pass_recursion_depth_remaining: int = PASS_RECURSION_MAX_DEPTH,
 ) -> MCTSNode:
     """`num_simulations` 回のMCTSシミュレーションを実行し、探索済みルートを返す。
 
@@ -338,6 +369,8 @@ def _run_simulations(
         pass_recursion_budget: パス局面に遭遇した際の再帰探索に使う、
             `num_simulations`とは独立した小さいシミュレーション予算
             （モジュールdocstring参照）。
+        pass_recursion_depth_remaining: パス局面の再帰探索があと何段まで
+            許されるか（モジュールdocstring参照）。
 
     Returns:
         探索済みのルートノード（`visit_count`/`value_sum` が更新済み）。
@@ -361,7 +394,16 @@ def _run_simulations(
             path.append(node)
 
         value = _evaluate_leaf(
-            node, board, color, network, board_size, device, puct_c, rng, pass_recursion_budget
+            node,
+            board,
+            color,
+            network,
+            board_size,
+            device,
+            puct_c,
+            rng,
+            pass_recursion_budget,
+            pass_recursion_depth_remaining,
         )
 
         for path_node in reversed(path):
@@ -385,6 +427,7 @@ def mcts_search(
     add_noise: bool = True,
     rng: np.random.Generator | None = None,
     pass_recursion_budget: int = PASS_RECURSION_SIMULATION_BUDGET,
+    pass_recursion_depth_remaining: int = PASS_RECURSION_MAX_DEPTH,
 ) -> dict[Move, float]:
     """PUCTベースのMCTSを実行し、ルートの正規化済み訪問回数分布を返す。
 
@@ -407,6 +450,9 @@ def mcts_search(
         pass_recursion_budget: パス局面に遭遇した際の再帰探索に使う、
             `num_simulations`とは独立した小さいシミュレーション予算
             （モジュールdocstring参照。既定値は`config.PASS_RECURSION_SIMULATION_BUDGET`）。
+        pass_recursion_depth_remaining: パス局面の再帰探索があと何段まで
+            許されるか（モジュールdocstring参照。既定値は
+            `config.PASS_RECURSION_MAX_DEPTH`）。
 
     Returns:
         `{move: normalized_visit_count}`。合法手だけがキーに含まれる。
@@ -425,5 +471,6 @@ def mcts_search(
         dirichlet_alpha,
         dirichlet_epsilon,
         pass_recursion_budget,
+        pass_recursion_depth_remaining,
     )
     return normalized_visit_counts(root)
