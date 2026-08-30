@@ -11,6 +11,7 @@
 - **GUI**: 盤面は緑地に黒線のマス目、着手可能マスは灰色でハイライト。視点操作は全体回転・拡大縮小（VESTA的な3D結晶構造ビューアのイメージ）に加え、層ごとに絞り込んで見るオプションを持つ。
 - **配信**: まずはビルドツールなしの素の HTML/CSS/JS で実装し、HTTPS で静的サイトとして公開する。**App Store でのネイティブ配信は、Capacitor による iOS ラッピング（オフライン同梱・GitHub Actions macOS ランナーでのビルド/署名/TestFlight提出）で行う。詳細は [ios-native-packaging](.claude/skills/ios-native-packaging/SKILL.md) を正本とする。**
 - **CPU対戦相手**: 自己対戦強化学習（AlphaZero風。「GAN」は文字通りのGenerator/Discriminatorではなく自己対戦を指す）で学習したモデルを、ブラウザ内推論（`onnxruntime-web`、CDN経由・サーバー不要）で使う。レベル1は簡易なランダムCPU、レベル2〜5は学習済みチェックポイントを自己対戦Eloで評価して選定した4段階。学習アルゴリズムの正本は [gan-cpu-self-play](.claude/skills/gan-cpu-self-play/SKILL.md)。
+- **オンライン対戦**: Firebase Firestoreをクライアントから直接読み書きするサーバーレス構成（自前サーバーは書かない）。ルームコード制・ランダムマッチングの両方に対応し、匿名認証（アカウント登録不要）で参加者を識別する。まずWeb版のみ対応し、iOS版への反映は別途行う。正本は [online-multiplayer](.claude/skills/online-multiplayer/SKILL.md)。
 
 ## 現時点のアーキテクチャ方針
 
@@ -20,6 +21,7 @@
 - **GANベースCPU対戦相手の学習コードは `training/` 配下のPythonでオフラインに行う（GPU版Dockerコンテナ、[training/README.md](training/README.md) 参照）。** ブラウザ側の「ビルドツールなし・静的サイト」方針とは独立した領域として扱い、学習用の依存関係（PyTorch等）は `training/` 側の `pyproject.toml` でのみ管理する（ブラウザ側コードのゼロ依存方針には影響させない）。学習済みモデルは盤面サイズ・レベルごとにONNX形式へエクスポートし（`training/export_onnx.py`）、`data/models/{boardSize}/level{N}.onnx` として配置する（生成物のため大きなバイナリはリポジトリにコミットせず、`.gitignore`で除外）。
 - **GAN CPUのブラウザ側推論コード（`src/ai/`）は `src/logic/` とは別モジュールとして扱う。** `src/logic/` はDOM/three/非同期I/Oに一切依存しない純粋関数群のままとし、ONNXモデルのロード・非同期推論は `src/ai/` に閉じ込める。純粋なロジック部分（合法手マスク付きsoftmax・サンプリング等）は `onnxruntime-web` への依存を持たない形で切り出し、Node標準テストで検証する。
 - **iOSネイティブアプリ化（Capacitor）は `ios-app/` 配下で独立して行う。** `training/` が独自の `pyproject.toml` を持つのと同じ考え方で、`ios-app/` は独自の `package.json`（Capacitor関連のみ）を持ち、ブラウザ側コードのゼロ依存方針には影響させない。Web資産（`index.html`/`src/`/`data/`）は `scripts/stage-web-assets.sh` でビルド時にコピーし、GitHub PagesとiOSアプリ同梱の両方が同じ一覧を参照する（正本: [ios-native-packaging](.claude/skills/ios-native-packaging/SKILL.md)）。
+- **オンライン対戦のFirestore連携コード（`src/net/`）は `src/logic/` とは別モジュールとして扱う。** `src/logic/` はDOM/three/非同期I/Oに一切依存しない純粋関数群のままとし、Firestoreへの読み書き・購読は `src/net/` に閉じ込める。着手の適用・合法手判定は`src/net/`側で再実装せず、必ず`src/logic/`のものをそのまま使う。ルームコードの生成・検証など純粋な部分は`onnxruntime-web`同様、Firebase SDKへの依存を持たない形で切り出し、Node標準テストで検証する（正本: [online-multiplayer](.claude/skills/online-multiplayer/SKILL.md)）。
 
 ## JavaScript コーディング規約
 
@@ -90,7 +92,7 @@ GANベースCPU対戦相手の学習コード（`training/` 配下）に適用�
 ## `.claude/` の使い分け
 
 - **rules/** — 常に従うべき指針。`common/` は言語非依存（Git運用・テスト方針）、`javascript/` はJS/Three.js固有の規約、`python/` はPython/学習コード固有の規約。作業前提として常に有効。
-- **skills/** — コマンドやエージェントから呼び出す再利用可能なワークフロー定義（TDDループ、アトミックコミット手順、3D反転ルールの正本、静的デプロイ手順、バージョンタグ運用手順、iOSネイティブ配信の正本）。
+- **skills/** — コマンドやエージェントから呼び出す再利用可能なワークフロー定義（TDDループ、アトミックコミット手順、3D反転ルールの正本、静的デプロイ手順、バージョンタグ運用手順、iOSネイティブ配信の正本、オンライン対戦の正本）。
 - **agents/** — 限定的な範囲を持つタスク専門のサブエージェント（ゲームロジックレビュー、Three.js実装、学習コード実装/レビュー、コミット作成）。
 - **commands/** — スラッシュコマンド（`/commit`, `/plan-step`）。エージェントやスキルを起動するショートカット。
 - **hooks/** — ツール実行時の自動チェック（コミットメッセージのAngular規約検証、`console.log`/`debugger`残留の警告）。`settings.json` で登録。
