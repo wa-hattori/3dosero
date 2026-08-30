@@ -1,0 +1,44 @@
+# 正本: .claude/skills/ios-native-packaging/SKILL.md の「CI: .github/workflows/ios-release.yml」
+# 「署名: App Store Connect APIキー方式」節。
+#
+# CI(.github/workflows/ios-release.yml)とMacでのローカルデバッグの両方から
+# 同じlaneを呼ぶ。環境変数はCIではGitHub Secretsから、ローカルでは
+# fastlane/.env(.env.default をコピーして作成する。gitignore対象)から
+# dotenv経由で読み込まれる。
+
+default_platform(:ios)
+
+platform :ios do
+  desc "ローカル動作確認用: 自動署名でXcodeプロジェクトがビルドできることだけを確認する" \
+       "(App Store Connect資格情報は不要。ios-app/README.mdのデバッグ手順から使う想定)"
+  lane :build_local do
+    build_app(
+      scheme: "App",
+      export_method: "development",
+      output_directory: "./build",
+    )
+  end
+
+  desc "App Store Connect API Keyで署名し、TestFlightにアップロードする(CI・ローカル共通のリリースフロー)"
+  lane :release do
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_content: ENV.fetch("ASC_KEY_CONTENT"),
+      is_key_content_base64: true,
+    )
+
+    increment_version_number(version_number: ENV["MARKETING_VERSION"]) if ENV["MARKETING_VERSION"]
+    increment_build_number(build_number: ENV["BUILD_NUMBER"]) if ENV["BUILD_NUMBER"]
+
+    build_app(
+      scheme: "App",
+      export_method: "app-store",
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true,
+    )
+  end
+end
