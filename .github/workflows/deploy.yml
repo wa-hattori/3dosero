@@ -33,12 +33,10 @@ jobs:
 
       # 公開に必要な最小限のファイルだけを集める。training/ や .claude/ など
       # ゲーム本体の実行に不要なものは含めない(アーティファクトサイズ削減)。
+      # iOSアプリへの同梱(ios-app/www/)も同じスクリプトを使い、公開対象ファイル
+      # 一覧が2箇所で食い違わないようにする(.claude/skills/ios-native-packaging/SKILL.md)。
       - name: Stage deployable files
-        run: |
-          mkdir -p dist
-          cp index.html package.json dist/
-          cp -r src dist/src
-          cp -r data dist/data
+        run: ./scripts/stage-web-assets.sh dist
 
       - name: Configure Pages
         uses: actions/configure-pages@v6

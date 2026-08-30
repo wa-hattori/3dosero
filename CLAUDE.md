@@ -9,7 +9,7 @@
 - **盤面**: 通常の8×8オセロを上下に8枚積み重ねた立体グリッド（座標系: `x, y ∈ [0,7]` は同一平面、`z ∈ [0,7]` は層）。
 - **反転ルール**: 石を置いた位置から3次元の26方向（`dx,dy,dz ∈ {-1,0,1}` の組み合わせのうち `(0,0,0)` を除く全て＝同一平面8方向・上下1方向・立体斜め17方向）を走査し、相手石が連続したのち自分の石で終端していれば、その区間をすべて自分の色に反転する。詳細なアルゴリズムの正本は [othello-3d-flip-rule](.claude/skills/othello-3d-flip-rule/SKILL.md)。
 - **GUI**: 盤面は緑地に黒線のマス目、着手可能マスは灰色でハイライト。視点操作は全体回転・拡大縮小（VESTA的な3D結晶構造ビューアのイメージ）に加え、層ごとに絞り込んで見るオプションを持つ。
-- **配信**: まずはビルドツールなしの素の HTML/CSS/JS で実装し、HTTPS で静的サイトとして公開する。将来的には App Store でのネイティブ配信も視野に入れる。
+- **配信**: まずはビルドツールなしの素の HTML/CSS/JS で実装し、HTTPS で静的サイトとして公開する。**App Store でのネイティブ配信は、Capacitor による iOS ラッピング（オフライン同梱・GitHub Actions macOS ランナーでのビルド/署名/TestFlight提出）で行う。詳細は [ios-native-packaging](.claude/skills/ios-native-packaging/SKILL.md) を正本とする。**
 - **CPU対戦相手**: 自己対戦強化学習（AlphaZero風。「GAN」は文字通りのGenerator/Discriminatorではなく自己対戦を指す）で学習したモデルを、ブラウザ内推論（`onnxruntime-web`、CDN経由・サーバー不要）で使う。レベル1は簡易なランダムCPU、レベル2〜5は学習済みチェックポイントを自己対戦Eloで評価して選定した4段階。学習アルゴリズムの正本は [gan-cpu-self-play](.claude/skills/gan-cpu-self-play/SKILL.md)。
 
 ## 現時点のアーキテクチャ方針
@@ -19,6 +19,7 @@
 - **ゲームロジック（盤面状態・着手判定・反転判定）と描画/DOM操作コードは必ずモジュールを分離する。** ロジック側は `three` や DOM APIに一切依存しない純粋関数群にする。理由: ロジックは自動テストで担保し、描画は差し替え可能にするため。
 - **GANベースCPU対戦相手の学習コードは `training/` 配下のPythonでオフラインに行う（GPU版Dockerコンテナ、[training/README.md](training/README.md) 参照）。** ブラウザ側の「ビルドツールなし・静的サイト」方針とは独立した領域として扱い、学習用の依存関係（PyTorch等）は `training/` 側の `pyproject.toml` でのみ管理する（ブラウザ側コードのゼロ依存方針には影響させない）。学習済みモデルは盤面サイズ・レベルごとにONNX形式へエクスポートし（`training/export_onnx.py`）、`data/models/{boardSize}/level{N}.onnx` として配置する（生成物のため大きなバイナリはリポジトリにコミットせず、`.gitignore`で除外）。
 - **GAN CPUのブラウザ側推論コード（`src/ai/`）は `src/logic/` とは別モジュールとして扱う。** `src/logic/` はDOM/three/非同期I/Oに一切依存しない純粋関数群のままとし、ONNXモデルのロード・非同期推論は `src/ai/` に閉じ込める。純粋なロジック部分（合法手マスク付きsoftmax・サンプリング等）は `onnxruntime-web` への依存を持たない形で切り出し、Node標準テストで検証する。
+- **iOSネイティブアプリ化（Capacitor）は `ios-app/` 配下で独立して行う。** `training/` が独自の `pyproject.toml` を持つのと同じ考え方で、`ios-app/` は独自の `package.json`（Capacitor関連のみ）を持ち、ブラウザ側コードのゼロ依存方針には影響させない。Web資産（`index.html`/`src/`/`data/`）は `scripts/stage-web-assets.sh` でビルド時にコピーし、GitHub PagesとiOSアプリ同梱の両方が同じ一覧を参照する（正本: [ios-native-packaging](.claude/skills/ios-native-packaging/SKILL.md)）。
 
 ## JavaScript コーディング規約
 
@@ -89,7 +90,7 @@ GANベースCPU対戦相手の学習コード（`training/` 配下）に適用�
 ## `.claude/` の使い分け
 
 - **rules/** — 常に従うべき指針。`common/` は言語非依存（Git運用・テスト方針）、`javascript/` はJS/Three.js固有の規約、`python/` はPython/学習コード固有の規約。作業前提として常に有効。
-- **skills/** — コマンドやエージェントから呼び出す再利用可能なワークフロー定義（TDDループ、アトミックコミット手順、3D反転ルールの正本、静的デプロイ手順、バージョンタグ運用手順）。
+- **skills/** — コマンドやエージェントから呼び出す再利用可能なワークフロー定義（TDDループ、アトミックコミット手順、3D反転ルールの正本、静的デプロイ手順、バージョンタグ運用手順、iOSネイティブ配信の正本）。
 - **agents/** — 限定的な範囲を持つタスク専門のサブエージェント（ゲームロジックレビュー、Three.js実装、学習コード実装/レビュー、コミット作成）。
 - **commands/** — スラッシュコマンド（`/commit`, `/plan-step`）。エージェントやスキルを起動するショートカット。
 - **hooks/** — ツール実行時の自動チェック（コミットメッセージのAngular規約検証、`console.log`/`debugger`残留の警告）。`settings.json` で登録。
