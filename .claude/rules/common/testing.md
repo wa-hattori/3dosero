@@ -26,3 +26,12 @@ description: ゲームロジックのユニットテスト方針（言語非依�
 ## TDDループ
 
 新しいゲームロジックを実装する際は [tdd-loop](../../skills/tdd-loop/SKILL.md) の Red → Green → Refactor ループに従う。
+
+## Python（学習コード）のテスト方針
+
+対象は `training/` 配下のPythonコード（GANベースCPU対戦相手の学習）。JS側と同様、**副作用のない純粋関数（盤面エンコーディング、報酬計算、チェックポイント強さ評価など）はユニットテスト必須**とする。学習ループそのもの（乱数・GPU・長時間実行に依存する）は自動テスト対象外とし、小規模データでの動作確認（スモークテスト）と手動確認で担保する。[tdd-loop](../../skills/tdd-loop/SKILL.md) のRed→Green→RefactorはPython側の純粋関数部分にも同様に適用するが、学習ループ本体には適用しない。
+
+- テストランナー・アサーションは [pytest](https://docs.pytest.org/) を採用する。
+- テストファイルは `test_*.py` として、テスト対象と同じディレクトリに配置する（例: `training/board_encoding.py` → `training/test_board_encoding.py`）。pytestのデフォルト探索規則に従うため。
+- `pyproject.toml` の `[tool.pytest.ini_options]` でテスト対象パスを指定する。
+- 境界値（盤面の端、空盤面、詰み間際の局面など）を必ずカバーする。

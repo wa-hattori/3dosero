@@ -1,0 +1,17 @@
+[project]
+name = "3dosero-training"
+version = "0.0.0"
+description = "GAN/self-play training code for the 3dosero CPU opponent"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["training"]
+pythonpath = ["."]

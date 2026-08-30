@@ -1,0 +1,17 @@
+services:
+  training:
+    build:
+      context: ..
+      dockerfile: training/Dockerfile
+    image: 3dosero-training:latest
+    working_dir: /workspace
+    volumes:
+      - ..:/workspace
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: pytest
