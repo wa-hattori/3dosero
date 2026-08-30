@@ -119,6 +119,10 @@ end
   - App Store提出用アイコンはアルファチャンネルを持てない（Appleが拒否する）ため、生成スクリプトは`-alpha remove -alpha off`で必ず不透明化する。
 - プライバシーポリシー: GitHub Pagesに簡単な1ページ（`privacy.html`、リポジトリルート直下、`deploy.yml`のステージ対象に追加）を用意し、そのURLをApp Store Connectのプライバシーポリシー欄に登録する。内容は「個人情報を収集しない」旨を明記する程度の最小限のものとする（本アプリはサーバー通信を行わないため）。
 
+## App Store Connect 掲載情報
+
+アプリ名・サブタイトル・説明文・キーワード・カテゴリ・審査ノートなどの下書きは [ios-app/app-store-listing.md](../../../ios-app/app-store-listing.md) にまとめてある。App Store Connectでアプリを登録する際はそこからコピーして使う。
+
 ## Apple Developer Program登録
 
 このスキルの対象外。取得手順はユーザーからの依頼があった時点で別途案内する。
