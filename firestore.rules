@@ -1,0 +1,64 @@
+// Firestoreセキュリティルール。正本: .claude/skills/online-multiplayer/SKILL.md の
+// 「Firestoreセキュリティルール」節。
+//
+// 反映は `firebase deploy --only firestore:rules`（Firebase CLIのセットアップ・
+// プロジェクトへのログインが必要なユーザー側の手動作業）。
+//
+// 信頼境界: ここで強制するのは「誰が」「いつ（自分の手番か）」書き込めるかまで。
+// 着手が26方向反転ルール上合法かどうかはクライアント側(src/logic/)の検証に委ねる
+// （SKILL.mdの「信頼境界」節参照）。
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /rooms/{roomId} {
+      // 観戦機能を将来追加しやすいよう、読み取りは誰でも許可する。
+      allow read: if true;
+
+      // 部屋の作成は、作成者が黒番として自分自身を登録し、白番は空席、
+      // ステータスが「待機中」である場合のみ許可する。
+      allow create: if request.auth != null
+        && request.resource.data.players.black == request.auth.uid
+        && request.resource.data.players.white == null
+        && request.resource.data.status == 'waiting';
+
+      // 更新は、その部屋の参加者(黒番または白番)本人からのものであり、
+      // かつ「参加（白番の空席を自分で埋める)」または「自分の手番での着手」の
+      // いずれかである場合のみ許可する。
+      allow update: if request.auth != null
+        && isRoomParticipant(resource.data)
+        && isJoiningOrMyTurn(resource.data, request.resource.data);
+
+      function isRoomParticipant(room) {
+        return request.auth.uid == room.players.black || request.auth.uid == room.players.white;
+      }
+
+      function isJoiningOrMyTurn(before, after) {
+        let isJoining = before.players.white == null && after.players.white == request.auth.uid;
+        let isMyTurn = (before.currentTurn == 'black' && before.players.black == request.auth.uid)
+          || (before.currentTurn == 'white' && before.players.white == request.auth.uid);
+        return isJoining || isMyTurn;
+      }
+    }
+
+    match /matchmakingQueue/{ticketId} {
+      allow read: if request.auth != null;
+
+      // チケットの作成は本人のuidでのみ、初期ステータスは「待機中」でのみ許可する。
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'waiting';
+
+      // マッチ成立の更新（'waiting' -> 'matched'、roomIdを埋める）は、
+      // 他プレイヤーがこのチケットを見つけて成立させる可能性があるため
+      // uid本人以外からの更新も許可するが、一方向の遷移のみに限定し、
+      // uid/boardSizeなど他のフィールドの改ざんは拒否する。
+      allow update: if request.auth != null
+        && resource.data.status == 'waiting'
+        && request.resource.data.status == 'matched'
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.boardSize == resource.data.boardSize;
+    }
+  }
+}
