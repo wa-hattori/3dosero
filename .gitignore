@@ -43,3 +43,6 @@ training/checkpoints/
 # (App/build, App/Pods, DerivedData 等)はCapacitorが生成する ios-app/ios/.gitignore
 # で個別にカバーされているため、ここには重複させない。
 ios-app/www/
+
+# ユーザー個人用のメモ(リポジトリの正式ドキュメントではないため追跡しない)
+docs/app-store-release-notes.md
