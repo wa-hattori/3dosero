@@ -12,6 +12,10 @@
 
 CocoaPodsは不要（Capacitor 8はSwift Package Managerを使うため）。
 
+### 注意: 古いMac（macOSが最新でない）の場合
+
+インストールできるXcodeのバージョンはmacOS本体のバージョンに上限が決まっており（例: macOS Ventura 13.7系までしか入っていない場合、Xcodeは15.2までしか入らない）、かつAppleはApp Store提出に使えるXcode/SDKの最低バージョンを定期的（毎年春頃）に引き上げている（詳細は[ios-native-packaging SKILL.mdの該当節](../.claude/skills/ios-native-packaging/SKILL.md#古いmacでのローカルデバッグの限界)）。手元のmacOSが古く最新Xcodeが入らない場合、**このMacでできるのは下記「Xcodeでそのまま動作確認する」と「`build_local`」までで、`release`（TestFlightアップロード）まで到達させる必要はない。** それはCI（`macos-latest`ランナー、常に最新Xcodeを使用）側の役割であり、フォールバックではなくもともとの設計。
+
 ## 初回セットアップ
 
 ```bash
