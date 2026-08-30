@@ -22,3 +22,7 @@
 - [.claude/agents/](./.claude/agents/) — 専門タスク用サブエージェント
 - [.claude/commands/](./.claude/commands/) — スラッシュコマンド
 - [docs/plans/](./docs/plans/) — 開発計画の記録
+
+## License
+
+Copyright (c) 2026 wa-hattori. All rights reserved. 無断転載・複製・改変・再配布を禁じます。詳細は [LICENSE](./LICENSE) を参照。

@@ -1,0 +1,31 @@
+Copyright (c) 2026 wa-hattori
+
+All rights reserved.
+
+This repository is made publicly viewable on GitHub for portfolio and
+demonstration purposes only. Public visibility does not grant any
+license or rights under copyright, trademark, patent, or any other
+intellectual property law.
+
+No part of this repository — including its source code, documentation,
+game design, and any underlying ideas or concepts (such as the 3D
+flip-rule algorithm, the self-play CPU training approach, or the
+overall game design) — may be copied, reproduced, modified, published,
+distributed, or used to create derivative works, in whole or in part,
+without the prior written permission of the copyright holder.
+
+----------------------------------------------------------------------
+
+Copyright (c) 2026 wa-hattori
+
+無断転載・複製・改変・再配布を禁じます。
+
+本リポジトリは、ポートフォリオ・デモンストレーション目的でGitHub上に公開
+しています。公開されていることは、著作権・商標権・特許権その他の知的財産
+権に関するいかなる許諾も意味しません。
+
+ソースコード・ドキュメントに限らず、ゲームデザインやその根底にあるアイデア
+・コンセプト(立体オセロの26方向反転判定アルゴリズム、自己対戦強化学習に
+よるCPU対戦相手の学習手法、ゲーム全体の設計など)を含め、本リポジトリの
+内容の全部または一部を、著作権者による事前の書面による許可なく、複製・
+改変・公開・頒布・二次的著作物の作成等に利用することを禁じます。
