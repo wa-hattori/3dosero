@@ -98,3 +98,7 @@ Added flip logic.
 ### HTTPS公開との関係
 
 公開URL（GitHub Pages）は **タグをpushした時のみ** 自動デプロイされる（[static-deploy](../../skills/static-deploy/SKILL.md) 参照）。mainブランチへの通常のpushだけでは公開サイトの内容は変わらない。
+
+### リリースノート
+
+**すべてのバージョンタグに、GitHubのRelease機能でリリースノートを必ず付与する。** 手動での付け忘れを防ぐため、タグpush時に [.github/workflows/release.yml](../../../.github/workflows/release.yml) が自動でGitHub Releaseを作成する（人手の手順に依存しない）。具体的な手順・自動生成されたノートの調整方法は [release-tagging](../../skills/release-tagging/SKILL.md) を参照。

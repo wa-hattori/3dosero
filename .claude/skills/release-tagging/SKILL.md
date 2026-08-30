@@ -1,11 +1,13 @@
 ---
 name: release-tagging
-description: 「完成した」節目でバージョンタグを切り、GitHub Pagesの公開URLに反映させるまでの手順。実際にリリースを行う時に使う。
+description: 「完成した」節目でバージョンタグを切り、GitHub Pagesの公開URLへの反映とGitHub Releaseの作成まで確認する手順。実際にリリースを行う時に使う。
 ---
 
 # バージョンタグを切って公開する手順
 
-正本: [git-workflow.mdのバージョンタグ運用](../../rules/common/git-workflow.md#バージョンタグ運用)（何を・いつタグにするか）、[static-deploy](../static-deploy/SKILL.md)（タグpushで何が起きるか）。このスキルは両者をつなぐ実行手順。
+正本: [git-workflow.mdのバージョンタグ運用](../../rules/common/git-workflow.md#バージョンタグ運用)（何を・いつタグにするか、リリースノートの必須化方針）、[static-deploy](../static-deploy/SKILL.md)（タグpushで何が起きるか）。このスキルは両者をつなぐ実行手順。
+
+タグをpushすると、[.github/workflows/deploy.yml](../../../.github/workflows/deploy.yml)（GitHub Pagesへのデプロイ）と [.github/workflows/release.yml](../../../.github/workflows/release.yml)（GitHub Releaseの自動作成）の2つが並行して起動する。リリースノートを書き忘れても`release.yml`が直前のタグからの変更を自動生成するため、**GitHub Releaseにノートが付かない状態は原則発生しない。**
 
 ## 前提（初回のみ）
 
@@ -46,11 +48,14 @@ description: 「完成した」節目でバージョンタグを切り、GitHub 
    ```
    タグのpushをトリガーに [.github/workflows/deploy.yml](../../../.github/workflows/deploy.yml) が起動する。
 
-7. **GitHub ActionsでワークフローがSuccessしたことを確認する。**
-   リポジトリの Actions タブから確認する（`gh run list` / `gh run watch` でも可）。
+7. **GitHub Actionsで両方のワークフローがSuccessしたことを確認する。**
+   リポジトリの Actions タブから `deploy` と `release` の両方を確認する（`gh run list` / `gh run watch` でも可）。
 
 8. **公開後の確認を行う。**
    [static-deploy「公開後の確認」](../static-deploy/SKILL.md#公開後の確認)に従い、実際の公開URLで画面右下のバージョンバッジが `vX.Y.Z` と一致していること、主要な操作が問題なく動くことを確認する。
+
+9. **GitHub Releaseのノートを確認し、必要なら書き足す。**
+   `release.yml` が自動生成したノート（直前のタグからのコミット・PRの一覧）はそのままでも「ノート無し」は防げるが、プレイヤー向けに何が変わったかを一言でも書き足すと親切。リポジトリの Releases ページ、または `gh release edit vX.Y.Z --notes "..."` で追記できる（自動生成分は消さず、先頭に追記する形を推奨）。
 
 ## 失敗した場合
 
