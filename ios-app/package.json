@@ -1,0 +1,17 @@
+{
+  "name": "3dosero-ios",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Capacitor native iOS wrapper for 3dosero (3D Othello). Independent from the root web app's zero-dependency policy.",
+  "scripts": {
+    "sync": "cap sync ios",
+    "open": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.5.0",
+    "@capacitor/ios": "8.5.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.0"
+  }
+}

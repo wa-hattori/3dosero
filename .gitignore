@@ -37,3 +37,9 @@ training/checkpoints/
 # GAN CPU ONNX models: intentionally NOT ignored. data/models/{boardSize}/level{2..5}.onnx
 # are real deployment artifacts fetched by the browser at runtime (see src/ai/model-loader.js)
 # and are committed like the other static assets under data/.
+
+# iOSアプリ(ios-app/): scripts/stage-web-assets.sh が生成するWeb資産のコピー。
+# node_modules/ は上の汎用ルールで既にカバーされる。ios-app/ios/ 配下のビルド生成物
+# (App/build, App/Pods, DerivedData 等)はCapacitorが生成する ios-app/ios/.gitignore
+# で個別にカバーされているため、ここには重複させない。
+ios-app/www/
