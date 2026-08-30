@@ -61,13 +61,22 @@ CLAUDE.mdの「配信」節に言う「将来的にはApp Storeでのネイテ�
 
 ## CI: `.github/workflows/ios-release.yml`
 
-- トリガーは他の2つ（`deploy.yml`/`release.yml`）と同じ `push: tags: v*` で自動起動する。ただし **`environment: app-store-release` を指定し、そのEnvironmentに「Required reviewers」保護ルールを設定**することで、実際のジョブ実行前に人間の承認を挟む（Web公開は即時反映でよいが、App Store提出はビルド番号を消費し取り消しにくいため、自動デプロイとは異なり明示的な承認を必須にする）。このEnvironment保護ルールの設定は、[static-deploy](../static-deploy/SKILL.md)で経験した`github-pages` Environmentの設定と同様、GitHub Web UI側での1回限りの手動作業になる（Settings → Environments → `app-store-release` → Required reviewers）。
+- トリガーは他の2つ（`deploy.yml`/`release.yml`）と同じ `push: tags: v*` に加え、**`workflow_dispatch`（GitHub UIの「Run workflow」ボタン、任意のブランチ/タグを選べる）でも手動起動できる。** ローカルMacでのXcodeデバッグを前提にできない場合（後述「ローカルMacが使えない場合の開発フロー」）、動作確認のたびにバージョンタグを切るのは重すぎるため、確認したいブランチを直接指定して手動起動するのが日常的な使い方になる。バージョンタグは引き続き「完成した節目」だけに使う（[release-tagging](../release-tagging/SKILL.md)の方針通り）。
+- どちらのトリガーでも **`environment: app-store-release` を指定し、そのEnvironmentに「Required reviewers」保護ルールを設定**することで、実際のジョブ実行前に人間の承認を挟む（Web公開は即時反映でよいが、App Store提出はビルド番号を消費し取り消しにくいため、自動デプロイとは異なり明示的な承認を必須にする）。このEnvironment保護ルールの設定は、[static-deploy](../static-deploy/SKILL.md)で経験した`github-pages` Environmentの設定と同様、GitHub Web UI側での1回限りの手動作業になる（Settings → Environments → `app-store-release` → Required reviewers）。
 - ジョブ内容（`runs-on: macos-latest`）:
   1. `actions/checkout`
-  2. Node.jsセットアップ、`scripts/stage-web-assets.sh ios-app/www` でWeb資産を同梱
-  3. `ios-app/`で`npm ci`、`npx cap sync ios`
-  4. Rubyセットアップ、`bundle install`（`ios-app/fastlane/Gemfile`でfastlaneを管理）
-  5. App Store Connect API Key（後述のSecrets）を使い、`bundle exec fastlane release`でビルド・自動署名・TestFlightアップロードまで実行
+  2. Node.jsセットアップ
+  3. バージョン決定: `MARKETING_VERSION`は`package.json`の値をそのまま使う（タグpush・workflow_dispatchのどちらでも同じロジックで求まる）。`BUILD_NUMBER`は`github.run_number`
+  4. `scripts/stage-web-assets.sh ios-app/www` でWeb資産を同梱
+  5. `ios-app/`で`npm ci`、`npx cap sync ios`
+  6. Rubyセットアップ、`bundle install`（`ios-app/Gemfile`でfastlaneを管理）
+  7. App Store Connect API Key（後述のSecrets）を使い、`bundle exec fastlane release`でビルド・自動署名・TestFlightアップロードまで実行
+
+## ローカルMacが使えない場合の開発フロー
+
+ローカルMacで最新のXcodeを用意できない場合（機材の制約、macOSのバージョンが古い等。下記「古いMacでのローカルデバッグの限界」参照）は、**ビルド・署名・動作確認のすべてをCIとTestFlightに任せる**のを主経路とする（[ios-app/README.md](../../../ios-app/README.md)に具体的な手順）。
+
+コード変更 → push → Actions画面から`ios-release.yml`を`workflow_dispatch`で手動起動 → `app-store-release`の承認 → CIがビルド・署名・TestFlightアップロード → iPhoneのTestFlightアプリで実機確認、というループになる。ローカルの`npx cap open ios`や`fastlane`実行は一切不要。1サイクルの所要時間はローカルビルドより長い（CI実行時間＋承認＋TestFlight反映待ち）ため、複数の変更をまとめてから起動する方が効率的。
 
 ## 署名: App Store Connect APIキー方式
 
