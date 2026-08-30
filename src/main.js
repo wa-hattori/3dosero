@@ -20,6 +20,7 @@ import { createBgmPlayer } from './audio/bgm-player.js';
 import { setClickSoundMuted } from './audio/click-sound.js';
 import { createMuteToggle } from './ui/mute-toggle.js';
 import { createTitleButton } from './ui/title-button.js';
+import { createVersionBadge } from './ui/version-badge.js';
 
 /** 対戦モードごとの対局画面スターフィールドの色調。 */
 const BATTLE_STARFIELD_COLORS = {
@@ -69,6 +70,7 @@ createMuteToggle(uiOverlay, (muted) => {
   bgmPlayer.setMuted(muted);
   setClickSoundMuted(muted);
 });
+createVersionBadge(uiOverlay);
 
 /**
  * 選択された対戦モード・盤面サイズ・CPUレベルで対局を開始する。3Dシーン・ゲーム状態・UIを一式構築する。

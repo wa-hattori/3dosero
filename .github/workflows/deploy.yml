@@ -1,0 +1,53 @@
+name: Deploy to GitHub Pages
+
+# タグ駆動デプロイ: v* 形式のタグをpushした時のみ実行される。
+# mainブランチへの通常のpushでは公開サイトは更新されない。
+# 正本: .claude/rules/common/git-workflow.md の「バージョンタグ運用」節、
+# .claude/skills/release-tagging/SKILL.md。
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時に複数のデプロイが走らないようにする。実行中のデプロイは
+# キャンセルせず完了させる(タグは基本的に連続pushされないため)。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # 公開に必要な最小限のファイルだけを集める。training/ や .claude/ など
+      # ゲーム本体の実行に不要なものは含めない(アーティファクトサイズ削減)。
+      - name: Stage deployable files
+        run: |
+          mkdir -p dist
+          cp index.html package.json dist/
+          cp -r src dist/src
+          cp -r data dist/data
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
