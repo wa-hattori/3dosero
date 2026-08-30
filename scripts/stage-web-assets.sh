@@ -1,5 +1,5 @@
 #!/bin/bash
-# ゲーム本体の実行に必要な最小限のファイル(index.html/src/data/package.json)を
+# ゲーム本体の実行に必要な最小限のファイル(index.html/privacy.html/src/data/package.json)を
 # 指定ディレクトリにコピーする。GitHub Pages公開(.github/workflows/deploy.yml)と
 # iOSアプリへのオフライン同梱(ios-app/www/)の両方がこのスクリプトを使うことで、
 # 「公開対象ファイル一覧」が2箇所に分散して食い違うのを防ぐ。
@@ -20,7 +20,7 @@ dest_dir="$1"
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 
 mkdir -p "$dest_dir"
-cp "$repo_root/index.html" "$repo_root/package.json" "$dest_dir/"
+cp "$repo_root/index.html" "$repo_root/package.json" "$repo_root/privacy.html" "$dest_dir/"
 cp -r "$repo_root/src" "$dest_dir/src"
 cp -r "$repo_root/data" "$dest_dir/data"
 

@@ -19,7 +19,7 @@ description: ビルドツール不要の素のHTML/CSS/JS構成のアプリをHT
 ## GitHub Pages での公開の仕組み
 
 1. （初回のみ・手動）GitHub上でリポジトリの Settings → Pages を開き、Source を **「GitHub Actions」** に設定する（「Deploy from a branch」ではない）。
-2. `v*` にマッチするタグ（例: `v0.1.0`）をpushすると、[.github/workflows/deploy.yml](../../../.github/workflows/deploy.yml) が起動し、公開に必要な最小限のファイル（`index.html` / `src/` / `data/` / `package.json`。`training/` や `.claude/` などゲーム本体に不要なものは含めない）だけを集めてPagesにデプロイする。
+2. `v*` にマッチするタグ（例: `v0.1.0`）をpushすると、[.github/workflows/deploy.yml](../../../.github/workflows/deploy.yml) が起動し、公開に必要な最小限のファイル（`index.html` / `privacy.html` / `src/` / `data/` / `package.json`。`training/` や `.claude/` などゲーム本体に不要なものは含めない）だけを集めてPagesにデプロイする。
 3. 数分後、`https://<username>.github.io/<repository>/` にタグ時点の内容が反映される。
 4. HTTPS化は GitHub Pages が自動で提供する。独自ドメインを使う場合は `CNAME` ファイルをリポジトリルートに追加し、Pages設定でカスタムドメインを指定する（この場合もワークフローのデプロイ対象ファイル一覧に追加が必要）。
 

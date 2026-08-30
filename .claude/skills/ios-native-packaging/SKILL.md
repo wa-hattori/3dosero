@@ -26,7 +26,7 @@ CLAUDE.mdの「配信」節に言う「将来的にはApp Storeでのネイテ�
 │   ├── ios/                         # `npx cap add ios` が生成するXcodeプロジェクト(コミット対象)
 │   └── fastlane/                    # Fastfile / Appfile(署名・ビルド・アップロードの自動化)
 ├── scripts/
-│   └── stage-web-assets.sh          # index.html/src/data/package.json を任意の出力先にコピーする共通スクリプト。
+│   └── stage-web-assets.sh          # index.html/privacy.html/src/data/package.json を任意の出力先にコピーする共通スクリプト。
 │                                      # .github/workflows/deploy.yml(GitHub Pages) と ios-app/www/ への
 │                                      # コピーの両方がこれを使い、公開対象ファイルの一覧が2箇所で
 │                                      # 食い違わないようにする。
@@ -55,7 +55,7 @@ CLAUDE.mdの「配信」節に言う「将来的にはApp Storeでのネイテ�
 
 ## Web資産の同梱（オフライン同梱の実装）
 
-`scripts/stage-web-assets.sh <dest-dir>` が、対局に必要な最小構成（`index.html` / `src/` / `data/` / `package.json`）を指定ディレクトリにコピーする。既存の[.github/workflows/deploy.yml](../../../.github/workflows/deploy.yml)のインライン`cp`コマンド群をこのスクリプトに切り出し、GitHub Pages公開とiOSアプリ同梱の両方から同じスクリプトを呼ぶことで、「公開対象ファイル一覧」が2箇所に分散して食い違うのを防ぐ。
+`scripts/stage-web-assets.sh <dest-dir>` が、対局に必要な最小構成（`index.html` / `privacy.html` / `src/` / `data/` / `package.json`）を指定ディレクトリにコピーする。既存の[.github/workflows/deploy.yml](../../../.github/workflows/deploy.yml)のインライン`cp`コマンド群をこのスクリプトに切り出し、GitHub Pages公開とiOSアプリ同梱の両方から同じスクリプトを呼ぶことで、「公開対象ファイル一覧」が2箇所に分散して食い違うのを防ぐ。
 
 `ios-release.yml`は、ビルド前に `scripts/stage-web-assets.sh ios-app/www` を実行してから `npx cap sync ios` を行う。
 
