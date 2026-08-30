@@ -2,16 +2,23 @@ name: Build and Release iOS App
 
 # 正本: .claude/skills/ios-native-packaging/SKILL.md
 #
-# 他の2つ(deploy.yml/release.yml)と同じ v* タグpushで自動起動するが、
-# `app-store-release` Environmentの「Required reviewers」承認ゲートにより、
-# 実際のジョブ実行前に人間の承認を必須にする(App Store提出はビルド番号を
-# 消費し、Web公開ほど気軽には取り消せないため)。
+# 他の2つ(deploy.yml/release.yml)と同じ v* タグpushでも起動するが、
+# それに加えて workflow_dispatch(GitHub UIの「Run workflow」ボタン、任意の
+# ブランチ/タグを選べる)でも手動起動できる。ローカルMacでのXcodeデバッグを
+# 前提にできない場合(手元のMacで最新Xcodeが入らない等)、動作確認は
+# 「このワークフローを手動起動 → TestFlightでビルドをインストールして実機確認」
+# がCI-onlyの主経路になる(ios-app/README.md参照)。
+#
+# どちらのトリガーでも、`app-store-release` Environmentの「Required
+# reviewers」承認ゲートにより、実際のジョブ実行前に人間の承認を必須にする
+# (App Store提出はビルド番号を消費し、Web公開ほど気軽には取り消せないため)。
 # このEnvironment保護ルールの設定はGitHub Web UI側での1回限りの手動作業。
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -30,22 +37,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # タグ名(例: v0.1.0)からvプレフィックスを除いたものをマーケティングバージョンにする。
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # マーケティングバージョンはpackage.jsonの値をそのまま使う(タグpushなら
+      # そのタグ時点の値、workflow_dispatchでの手動起動なら選んだブランチの
+      # 現在値になる。どちらのトリガーでも同じロジックで求まる)。
       # ビルド番号はワークフロー単位で単調増加するrun_numberを使う。
-      - name: Derive version numbers from the git tag
+      - name: Derive version numbers
         working-directory: .
         run: |
-          echo "MARKETING_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          echo "MARKETING_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
       - name: Stage web assets (offline bundling)
         working-directory: .
         run: ./scripts/stage-web-assets.sh ios-app/www
-
-      - name: Setup Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
 
       - name: Install Capacitor dependencies
         run: npm ci
