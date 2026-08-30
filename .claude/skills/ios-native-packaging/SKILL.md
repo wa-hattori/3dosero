@@ -114,7 +114,9 @@ end
 
 ## アイコン・プライバシーポリシー
 
-- アプリアイコン: `ios-app/ios/App/App/Assets.xcassets/AppIcon.appiconset/`にCapacitorの標準アイコンセットとして配置する。マスター画像は1024×1024のPNG1枚を用意し、[cordova-res](https://github.com/ionic-team/cordova-res)またはXcodeのアイコンセット生成機能で必要サイズに展開する。
+- アプリアイコン: Xcode 14以降のアセットカタログは1024×1024（アルファチャンネルなし）のPNG1枚だけで全サイズを自動生成するため、複数サイズを個別に用意する必要はない。`ios-app/ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png`を差し替えるだけでよい。
+  - デザインは「積み重なった正方形の盤面」というコンセプトを表す、3層のフラットなアイソメトリック板＋石2個（黒・白）。ソース（SVG）は`ios-app/icon-source.svg`、生成スクリプトは`ios-app/scripts/generate-icon.py`（ImageMagick/`convert`が必要。デザインを調整したら再実行して差し替える）。
+  - App Store提出用アイコンはアルファチャンネルを持てない（Appleが拒否する）ため、生成スクリプトは`-alpha remove -alpha off`で必ず不透明化する。
 - プライバシーポリシー: GitHub Pagesに簡単な1ページ（`privacy.html`、リポジトリルート直下、`deploy.yml`のステージ対象に追加）を用意し、そのURLをApp Store Connectのプライバシーポリシー欄に登録する。内容は「個人情報を収集しない」旨を明記する程度の最小限のものとする（本アプリはサーバー通信を行わないため）。
 
 ## Apple Developer Program登録
