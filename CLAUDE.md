@@ -22,6 +22,7 @@
 - **GAN CPUのブラウザ側推論コード（`src/ai/`）は `src/logic/` とは別モジュールとして扱う。** `src/logic/` はDOM/three/非同期I/Oに一切依存しない純粋関数群のままとし、ONNXモデルのロード・非同期推論は `src/ai/` に閉じ込める。純粋なロジック部分（合法手マスク付きsoftmax・サンプリング等）は `onnxruntime-web` への依存を持たない形で切り出し、Node標準テストで検証する。
 - **iOSネイティブアプリ化（Capacitor）は `ios-app/` 配下で独立して行う。** `training/` が独自の `pyproject.toml` を持つのと同じ考え方で、`ios-app/` は独自の `package.json`（Capacitor関連のみ）を持ち、ブラウザ側コードのゼロ依存方針には影響させない。Web資産（`index.html`/`src/`/`data/`）は `scripts/stage-web-assets.sh` でビルド時にコピーし、GitHub PagesとiOSアプリ同梱の両方が同じ一覧を参照する（正本: [ios-native-packaging](.claude/skills/ios-native-packaging/SKILL.md)）。
 - **オンライン対戦のFirestore連携コード（`src/net/`）は `src/logic/` とは別モジュールとして扱う。** `src/logic/` はDOM/three/非同期I/Oに一切依存しない純粋関数群のままとし、Firestoreへの読み書き・購読は `src/net/` に閉じ込める。着手の適用・合法手判定は`src/net/`側で再実装せず、必ず`src/logic/`のものをそのまま使う。ルームコードの生成・検証など純粋な部分は`onnxruntime-web`同様、Firebase SDKへの依存を持たない形で切り出し、Node標準テストで検証する（正本: [online-multiplayer](.claude/skills/online-multiplayer/SKILL.md)）。
+- **iOS版のみのインタースティシャル広告（AdMob）は `src/ads/` に隔離する。** Web版には広告を入れない。`window.Capacitor?.isNativePlatform?.()`でネイティブiOS実行時のみ`@capacitor-community/admob`を動的importし、Web版ではこのコードパス自体に到達しない（広告関連のCDNモジュールもフェッチされない）。表示可否の判定（数局に1回）は純粋関数として切り出しテストする（正本: [ios-ads](.claude/skills/ios-ads/SKILL.md)）。
 
 ## JavaScript コーディング規約
 
@@ -92,7 +93,7 @@ GANベースCPU対戦相手の学習コード（`training/` 配下）に適用�
 ## `.claude/` の使い分け
 
 - **rules/** — 常に従うべき指針。`common/` は言語非依存（Git運用・テスト方針）、`javascript/` はJS/Three.js固有の規約、`python/` はPython/学習コード固有の規約。作業前提として常に有効。
-- **skills/** — コマンドやエージェントから呼び出す再利用可能なワークフロー定義（TDDループ、アトミックコミット手順、3D反転ルールの正本、静的デプロイ手順、バージョンタグ運用手順、iOSネイティブ配信の正本、オンライン対戦の正本）。
+- **skills/** — コマンドやエージェントから呼び出す再利用可能なワークフロー定義（TDDループ、アトミックコミット手順、3D反転ルールの正本、静的デプロイ手順、バージョンタグ運用手順、iOSネイティブ配信の正本、オンライン対戦の正本、iOS広告表示の正本）。
 - **agents/** — 限定的な範囲を持つタスク専門のサブエージェント（ゲームロジックレビュー、Three.js実装、学習コード実装/レビュー、コミット作成）。
 - **commands/** — スラッシュコマンド（`/commit`, `/plan-step`）。エージェントやスキルを起動するショートカット。
 - **hooks/** — ツール実行時の自動チェック（コミットメッセージのAngular規約検証、`console.log`/`debugger`残留の警告）。`settings.json` で登録。
