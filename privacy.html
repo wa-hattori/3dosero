@@ -53,41 +53,68 @@
 <body>
   <main>
     <h1>Privacy Policy — 3dosero (三次元オセロ)</h1>
-    <p class="updated">Last updated: 2026-08-30</p>
+    <p class="updated">Last updated: 2026-08-31</p>
 
-    <p>3dosero (published as "三次元オセロ" on the App Store) is a single-player /
-      local-play 3D Othello game. This policy covers both the web version
-      and the iOS app.</p>
+    <p>3dosero (published as "三次元オセロ" on the App Store) is a 3D Othello
+      game with CPU, local, and online opponents. This policy covers both
+      the web version and the iOS app.</p>
 
-    <h2>Data collection</h2>
-    <p>This app does <strong>not</strong> collect, store, or transmit any
-      personal information. Specifically, it does not:</p>
+    <h2>Account and personal information</h2>
+    <p>This app does <strong>not</strong> require an account, sign-in, or
+      any personal details (name, email, etc.) at any point, in any mode.</p>
+
+    <h2>Online multiplayer</h2>
+    <p>Online play (room codes and random matchmaking) is powered by
+      Google Firebase (Cloud Firestore). To make this work, the app:</p>
     <ul>
-      <li>require an account, sign-in, or any personal details</li>
-      <li>use analytics, tracking, or advertising SDKs</li>
-      <li>send gameplay data, device identifiers, or usage statistics to any
-        server</li>
-      <li>share any data with third parties (there is no data to share)</li>
+      <li>signs you into Firebase anonymously, which assigns a random
+        session identifier (not tied to your name, email, or any other
+        personal information, and not shared between devices or app
+        reinstalls)</li>
+      <li>sends the board state and moves of the current online game to
+        Firebase's servers so your opponent's device can see them in real
+        time</li>
     </ul>
+    <p>No game data is retained beyond what's needed to run the match; this
+      app does not build a profile of you or your play history. Firebase is
+      operated by Google; see
+      <a href="https://firebase.google.com/support/privacy">Firebase's
+        privacy information</a>. CPU and local (same-device) play never
+      contact any server.</p>
 
-    <h2>Network access</h2>
-    <p>The iOS app ships with its own copy of the game and CPU opponent
-      files, so it does not need a network connection to play. The web
-      version, by nature of being a website, is loaded over HTTPS from
-      GitHub Pages like any other site, and loads a small number of
-      third-party JavaScript libraries (three.js, onnxruntime-web) from
-      public CDNs (jsDelivr) to render the 3D board and run the on-device
-      CPU opponent. These libraries run entirely in your browser; no
-      gameplay data is sent back to them or to us.</p>
+    <h2>Advertising (iOS app only)</h2>
+    <p>The iOS app shows an occasional interstitial ad (roughly once every
+      few games) via Google AdMob. The web version never shows ads. On
+      first use, iOS will ask for permission to allow tracking
+      (App Tracking Transparency) — declining this is fully supported and
+      just means you'll see non-personalized ads instead. AdMob may collect
+      device and advertising identifiers as described in
+      <a href="https://policies.google.com/technologies/partner-sites">Google's
+        advertising and measurement policy</a>.</p>
+
+    <h2>Analytics</h2>
+    <p>This app does not use any separate analytics or crash-reporting SDK
+      beyond what's described above (Firebase for online play, AdMob for
+      ads on iOS).</p>
+
+    <h2>Network access summary</h2>
+    <p>CPU and local (same-device) play work fully offline — the iOS app
+      ships its own copy of the game and CPU opponent files. Online play
+      requires a network connection (Firebase). The iOS app may also
+      contact Google's ad servers to load ads. The web version, by nature
+      of being a website, is loaded over HTTPS from GitHub Pages, and also
+      loads three.js and onnxruntime-web from a public CDN (jsDelivr) to
+      render the 3D board and run the on-device CPU opponent; these run
+      entirely in your browser.</p>
 
     <h2>Children's privacy</h2>
-    <p>Since no personal information is collected from anyone, this app
-      does not knowingly collect personal information from children.</p>
+    <p>This app does not knowingly collect personal information from
+      children. Ad content shown via AdMob is filtered according to this
+      app's audience settings in AdMob.</p>
 
     <h2>Changes to this policy</h2>
-    <p>If this policy ever changes (for example, if online multiplayer is
-      added in the future), this page will be updated and the "Last
-      updated" date above will change accordingly.</p>
+    <p>If this policy changes again, this page will be updated and the
+      "Last updated" date above will change accordingly.</p>
 
     <h2>Contact</h2>
     <p>Questions can be raised via the project's
@@ -96,26 +123,56 @@
     <hr />
 
     <h1>プライバシーポリシー — 3dosero（三次元オセロ）</h1>
-    <p class="updated">最終更新日: 2026-08-30</p>
+    <p class="updated">最終更新日: 2026-08-31</p>
 
-    <p>3dosero（App Store上の名称は「三次元オセロ」）は、1人プレイ・ローカル対戦の
-      立体オセロゲームです。このポリシーはWeb版・iOSアプリ版の両方に適用されます。</p>
+    <p>3dosero（App Store上の名称は「三次元オセロ」）は、CPU対戦・対人戦（同一端末）・
+      オンライン対戦に対応した立体オセロゲームです。このポリシーはWeb版・iOSアプリ版の
+      両方に適用されます。</p>
 
-    <h2>個人情報の収集について</h2>
-    <p>本アプリは、個人情報を一切収集・保存・送信しません。具体的には:</p>
+    <h2>アカウント・個人情報について</h2>
+    <p>本アプリは、いずれのモードでも、アカウント登録・ログイン・氏名やメールアドレス
+      等の個人情報の入力を一切必要としません。</p>
+
+    <h2>オンライン対戦について</h2>
+    <p>オンライン対戦（ルームコード制・ランダムマッチング）はGoogle Firebase
+      （Cloud Firestore）を利用しています。具体的には:</p>
     <ul>
-      <li>アカウント登録・ログイン・個人情報の入力は不要です</li>
-      <li>アクセス解析・トラッキング・広告SDKは使用していません</li>
-      <li>対局データ・端末識別子・利用状況をいかなるサーバーにも送信しません</li>
-      <li>第三者へのデータ提供は行いません（提供するデータ自体が存在しません）</li>
+      <li>匿名認証によりランダムなセッション識別子を割り当てます（氏名・メール
+        アドレス等とは一切紐づかず、端末の変更やアプリの再インストールで
+        引き継がれることもありません）</li>
+      <li>対局中の盤面・着手をFirebaseのサーバーに送信し、相手の端末にリアルタイムで
+        反映させます</li>
     </ul>
+    <p>対局の成立に必要な範囲を超えてデータを保持することはなく、プレイ履歴の
+      プロファイリング等も行いません。FirebaseはGoogleが運営するサービスです（
+      <a href="https://firebase.google.com/support/privacy">Firebaseのプライバシー
+      情報</a>）。CPU対戦・対人戦（同一端末）はサーバーと一切通信しません。</p>
 
-    <h2>通信について</h2>
-    <p>iOSアプリはゲーム本体・CPU対戦相手のファイルをアプリ内に同梱しているため、
-      プレイに通信は不要です。Web版はWebサイトである性質上、GitHub PagesからHTTPS
-      で配信され、3D描画・端末内でのCPU対戦相手の推論のため、jsDelivr（CDN）経由で
-      three.js・onnxruntime-webという2つのJavaScriptライブラリを読み込みます。
-      これらはブラウザ内でのみ動作し、対局データが外部に送信されることはありません。</p>
+    <h2>広告について（iOSアプリのみ）</h2>
+    <p>iOSアプリでは、Google AdMobによるインタースティシャル広告を数局に1回程度
+      表示します。Web版に広告は一切表示されません。初回利用時、iOSのシステムが
+      トラッキング許可（App Tracking Transparency）を確認しますが、許可しなくても
+      引き続きプレイでき、その場合は非パーソナライズ広告が表示されます。AdMobが
+      収集しうるデータについては
+      <a href="https://policies.google.com/technologies/partner-sites">Googleの
+      広告・測定に関するポリシー</a>をご参照ください。</p>
+
+    <h2>アクセス解析について</h2>
+    <p>上記（オンライン対戦のFirebase、iOS広告のAdMob）以外に、別途のアクセス解析・
+      クラッシュレポートSDKは使用していません。</p>
+
+    <h2>通信のまとめ</h2>
+    <p>CPU対戦・対人戦（同一端末）は完全にオフラインで動作します（iOSアプリは
+      ゲーム本体・CPU対戦相手のファイルをアプリ内に同梱）。オンライン対戦には
+      通信が必要です（Firebase）。iOSアプリは広告表示のためGoogleの広告サーバーとも
+      通信することがあります。Web版はWebサイトである性質上GitHub PagesからHTTPSで
+      配信され、3D描画・端末内でのCPU対戦相手の推論のためjsDelivr（CDN）経由で
+      three.js・onnxruntime-webを読み込みます。これらはブラウザ内でのみ動作します。</p>
+
+    <h2>お子様のプライバシーについて</h2>
+    <p>本アプリは、いかなる利用者からも意図的に個人情報を収集することはありません。
+      AdMob経由で表示される広告コンテンツは、AdMob上で設定したアプリの対象年齢に
+      応じてフィルタリングされます。</p>
 
     <h2>お問い合わせ</h2>
     <p><a href="https://github.com/wa-hattori/3dosero/issues">GitHub Issues</a>

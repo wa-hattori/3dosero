@@ -5,7 +5,7 @@
   "description": "8x8x8 3D Othello (Reversi) played across eight stacked 8x8 boards",
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test 'src/**/*.test.js'"
   },
   "license": "UNLICENSED"
 }

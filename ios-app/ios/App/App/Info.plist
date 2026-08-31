@@ -22,6 +22,13 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- 広告(AdMob)関連。正本: .claude/skills/ios-ads/SKILL.md -->
+	<!-- 下記のGADApplicationIdentifierはGoogle公式のテスト用App ID。
+	     本番申請前に実際のAdMob App IDへ差し替えること。 -->
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-3940256099942544~1458002511</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>広告を表示するために使用します。許可しない場合も引き続きプレイできます。</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

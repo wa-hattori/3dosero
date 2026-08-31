@@ -5,6 +5,7 @@ import { chooseRandomMove, RANDOM_CPU_LEVEL } from './logic/cpu.js';
 import { loadModelSession } from './ai/model-loader.js';
 import { chooseGanMove } from './ai/gan-cpu.js';
 import { submitMove, subscribeToRoom } from './net/room-sync.js';
+import { notifyGameEnded } from './ads/interstitial-ads.js';
 import { createSceneManager } from './render/scene-manager.js';
 import { createCameraControls } from './render/camera-controls.js';
 import { createBoardView } from './render/board-view.js';
@@ -141,6 +142,7 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online }) => {
       render();
 
       if (isOver) {
+        notifyGameEnded();
         createEndScreen(uiOverlay, { winner, counts: countStones(board) });
       }
     });
@@ -181,6 +183,7 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online }) => {
     render(passedColor);
 
     if (isOver) {
+      notifyGameEnded();
       createEndScreen(uiOverlay, { winner, counts: countStones(board) });
       return;
     }
