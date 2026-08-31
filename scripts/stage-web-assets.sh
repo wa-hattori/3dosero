@@ -21,7 +21,12 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 
 mkdir -p "$dest_dir"
 cp "$repo_root/index.html" "$repo_root/package.json" "$repo_root/privacy.html" "$dest_dir/"
-cp -r "$repo_root/src" "$dest_dir/src"
-cp -r "$repo_root/data" "$dest_dir/data"
+
+# rsyncを使うのは2つの理由から: (1) cp -r は宛先ディレクトリが既に存在すると
+# 上書きではなく入れ子になってしまう(www/src/src/...のような蓄積が発生する)ため、
+# 再実行しても安全な同期にする。(2) *.test.js を公開物・アプリ本体から除外する
+# (これまで誤って同梱されていた)。--delete で削除されたソースファイルも追従する。
+rsync -a --delete --exclude='*.test.js' "$repo_root/src/" "$dest_dir/src/"
+rsync -a --delete "$repo_root/data/" "$dest_dir/data/"
 
 echo "staged web assets into $dest_dir"
