@@ -96,6 +96,16 @@ CLAUDE.mdの「配信」節に言う「将来的にはApp Storeでのネイテ�
 - **Team ID**: `R2KLHG25KN`。Team IDは Apple Developer **アカウント**に紐づく識別子で、今後別のアプリを作る場合も共通（Bundle IDとは異なりアプリ単位ではない）。単体では認証・操作の権限を持たない識別子であり（実際の権限はAPIキーやApple ID＋2要素認証が担う）、Universal Links用の`apple-app-site-association`のように本来公開情報として扱われる場面もあるため、この正本に直接記録する（CIへの受け渡しは引き続き`ASC_TEAM_ID`のGitHub Secret経由で行い、値そのものの秘匿目的ではなく設定の一元管理のため）。
 - **Bundle ID**: `com.wahattori.threedosero`で最終確定。**Bundle IDはアプリ単位の識別子**（Team IDと異なり、アプリごとに一意でなければならない）。今後別のアプリを作る場合は`com.wahattori.<アプリ名>`のように新規のBundle IDを別途登録する。
 
+### App ID登録時のCapabilities
+
+現時点（v1）ではどれもチェック不要。検討した上で不要と判断した項目、および将来必要になりうる項目を記録する。**Capabilityは（Bundle IDと違い）登録後でも追加できる**ため、今チェックしなくても取り返しがつかないわけではない。
+
+- **Push通知**: 不要。オンライン対戦はFirestoreのリアルタイム購読で動作しており、APNs（Apple Push Notification service）を経由しない。「自分の手番になったらアプリを閉じていても通知する」を将来作る場合は必要になる（[online-multiplayer](../online-multiplayer/SKILL.md)ではv1スコープ外とした機能）。
+- **Game Center**: 使わない。Apple独自のマッチメイキング機構（GameKit）はWeb版から呼べないため不採用（[online-multiplayer](../online-multiplayer/SKILL.md)でFirebaseを選定した理由そのもの）。
+- **Associated Domains**（Universal Links）: 不要。「リンクを踏むと直接そのルームに参加できる」機能を作るなら必要になる。現状のルームコード共有は手入力前提。実現すればUXが上がる将来の拡張候補。
+- **Sign in with Apple**: 該当しない。Appleの審査ガイドライン4.8は「外部ログイン機能を提供する場合はSign in with Appleも用意すること」という規定だが、本アプリはFirebase匿名認証のみ（ログイン画面自体が存在しない）でこの規定の対象外。
+- **In-App Purchase**: 不要。無料アプリのため対象外。
+
 ## `ios-app/fastlane/Fastfile`（概要）
 
 ```ruby
