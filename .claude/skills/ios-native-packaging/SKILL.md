@@ -91,6 +91,11 @@ CLAUDE.mdの「配信」節に言う「将来的にはApp Storeでのネイテ�
 | `ASC_KEY_CONTENT` | APIキー(.p8)ファイルの内容をbase64エンコードしたもの |
 | `ASC_TEAM_ID` | Apple DeveloperのTeam ID |
 
+### 実際の値（記録）
+
+- **Team ID**: `R2KLHG25KN`。Team IDは Apple Developer **アカウント**に紐づく識別子で、今後別のアプリを作る場合も共通（Bundle IDとは異なりアプリ単位ではない）。単体では認証・操作の権限を持たない識別子であり（実際の権限はAPIキーやApple ID＋2要素認証が担う）、Universal Links用の`apple-app-site-association`のように本来公開情報として扱われる場面もあるため、この正本に直接記録する（CIへの受け渡しは引き続き`ASC_TEAM_ID`のGitHub Secret経由で行い、値そのものの秘匿目的ではなく設定の一元管理のため）。
+- **Bundle ID**: `com.wahattori.threedosero`で最終確定。**Bundle IDはアプリ単位の識別子**（Team IDと異なり、アプリごとに一意でなければならない）。今後別のアプリを作る場合は`com.wahattori.<アプリ名>`のように新規のBundle IDを別途登録する。
+
 ## `ios-app/fastlane/Fastfile`（概要）
 
 ```ruby
