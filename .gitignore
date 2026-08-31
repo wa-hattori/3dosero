@@ -46,3 +46,8 @@ ios-app/www/
 
 # ユーザー個人用のメモ(リポジトリの正式ドキュメントではないため追跡しない)
 docs/app-store-release-notes.md
+
+# App Store Connect APIキー等の実際の秘密情報。GitHub Secrets経由でのみCIに渡し、
+# リポジトリには絶対にコミットしない。
+data/keys/
+*.p8
