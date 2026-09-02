@@ -133,7 +133,23 @@ platform :ios do
     increment_version_number(xcodeproj: XCODEPROJ_PATH, version_number: ENV["MARKETING_VERSION"])
     increment_build_number(xcodeproj: XCODEPROJ_PATH, build_number: ENV["BUILD_NUMBER"])
 
-    build_app(scheme: "App", project: XCODEPROJ_PATH, export_method: "app-store")
+    # `npx cap add ios`直後のプロジェクトはCODE_SIGN_STYLE=Automaticだが
+    # DEVELOPMENT_TEAMが未設定なので、CIでは署名対象チームを明示的に書き込む。
+    update_code_signing_settings(
+      use_automatic_signing: true,
+      path: XCODEPROJ_PATH,
+      team_id: ENV["ASC_TEAM_ID"],
+    )
+
+    build_app(
+      scheme: "App",
+      project: XCODEPROJ_PATH,
+      export_method: "app-store",
+      export_team_id: ENV["ASC_TEAM_ID"],
+      # app_store_connect_api_keyの資格情報でプロビジョニングプロファイルを
+      # 自動作成・更新させる(matchを導入していないため必須)。
+      xcargs: "-allowProvisioningUpdates",
+    )
 
     upload_to_testflight(
       api_key: api_key,
@@ -167,6 +183,7 @@ end
 3. **ビルド番号(`CFBundleVersion`)は同一アプリ内で後戻りできない**。`github.run_number`を使うことで、ワークフローを再実行しない限り自然に単調増加する前提を壊さないよう注意する。
 4. **初回のCI実行は高確率でデバッグが必要**。実際のmacOSランナー・Apple資格情報を使った初回実行までは、この文書の内容は未検証の設計である旨を認識しておく。
 5. **`agvtool`系アクション（`increment_version_number`/`increment_build_number`）・`build_app`には必ず`xcodeproj:`/`project:`でパスを明示する。** 実際に初回CI実行で`increment_version_number`が「カレントディレクトリに.xcodeprojが無い」エラーで失敗した（`ios-app/fastlane/Fastfile`のカレントディレクトリは`ios-app/`だが、Xcodeプロジェクトの実体は`ios-app/ios/App/App.xcodeproj`にあり一致しないため）。`ios-app/fastlane/Fastfile`の`XCODEPROJ_PATH`定数を参照。
+6. **`npx cap add ios`直後の`App.xcodeproj`は`CODE_SIGN_STYLE=Automatic`だが`DEVELOPMENT_TEAM`が空**なので、誰もApple IDでサインインしていないCIランナーでは署名対象チームが決まらず`build_app`が「Signing for "App" requires a development team」で失敗する。`release`レーンで`update_code_signing_settings(team_id: ENV["ASC_TEAM_ID"])`を実行し、かつ`build_app`に`xcargs: "-allowProvisioningUpdates"`を渡すことで、`app_store_connect_api_key`の資格情報を使ってプロビジョニングプロファイルを自動作成・更新させる（`match`未導入のため必須の組み合わせ）。実際に初回CI実行で踏んだ不具合。
 
 ## 古いMacでのローカルデバッグの限界
 
