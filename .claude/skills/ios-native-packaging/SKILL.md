@@ -147,6 +147,17 @@ platform :ios do
       team_id: ENV["ASC_TEAM_ID"],
     )
 
+    # プロジェクト生成時点のCODE_SIGN_IDENTITYが両Configurationとも旧形式の
+    # "iPhone Developer"(=Development証明書)に固定されているため、archive時にも
+    # 配布用ではなく開発用プロビジョニングプロファイルが要求され「Your team has
+    # no devices from which to generate a provisioning profile」で失敗する。
+    # Releaseだけ"Apple Distribution"に上書きする。
+    update_code_signing_settings(
+      path: XCODEPROJ_PATH,
+      build_configurations: ["Release"],
+      code_sign_identity: "Apple Distribution",
+    )
+
     # gym(build_app)はapp_store_connect_api_keyの資格情報をxcodebuildの
     # クラウド署名(-allowProvisioningUpdates)へ自動転送しない(fastlane公式でも
     # 「あったら便利だが未実装」として認識されている既知の制約。
@@ -203,6 +214,7 @@ end
 5. **`agvtool`系アクション（`increment_version_number`/`increment_build_number`）・`build_app`には必ず`xcodeproj:`/`project:`でパスを明示する。** 実際に初回CI実行で`increment_version_number`が「カレントディレクトリに.xcodeprojが無い」エラーで失敗した（`ios-app/fastlane/Fastfile`のカレントディレクトリは`ios-app/`だが、Xcodeプロジェクトの実体は`ios-app/ios/App/App.xcodeproj`にあり一致しないため）。`ios-app/fastlane/Fastfile`の`XCODEPROJ_PATH`定数を参照。
 6. **`npx cap add ios`直後の`App.xcodeproj`は`CODE_SIGN_STYLE=Automatic`だが`DEVELOPMENT_TEAM`が空**なので、誰もApple IDでサインインしていないCIランナーでは署名対象チームが決まらず`build_app`が「Signing for "App" requires a development team」で失敗する。`release`レーンで`update_code_signing_settings(team_id: ENV["ASC_TEAM_ID"])`を実行してこれを解消する。実際に初回CI実行で踏んだ不具合。
 7. **`build_app`（gym）は`app_store_connect_api_key`で取得した資格情報を、xcodebuildのクラウド署名（`-allowProvisioningUpdates`）へ自動転送しない。** `xcargs: "-allowProvisioningUpdates"`だけを渡しても、xcodebuildは資格情報を持たないためローカルXcodeアカウントでの署名にフォールバックしようとし、「No Accounts: Add a new account in Accounts settings.」「No profiles for '...' were found」で失敗する（fastlane公式でも「あったら便利だが未実装」として認識されている既知の制約。[GitHub Discussion #19973](https://github.com/fastlane/fastlane/discussions/19973)）。`.p8`の内容を一時ファイルに書き出し、`-authenticationKeyPath`/`-authenticationKeyID`/`-authenticationKeyIssuerID`をxcargsで明示的に渡す必要がある（`ios-app/fastlane/Fastfile`参照）。実際に初回CI実行で踏んだ不具合。
+8. **`npx cap add ios`直後の`App.xcodeproj`は`CODE_SIGN_IDENTITY`が両Configuration（Debug/Release）とも旧形式の`"iPhone Developer"`（＝Development証明書）に固定されている。** これによりarchive時にも配布用ではなく開発用のプロビジョニングプロファイルが要求され、「Communication with Apple failed: Your team has no devices from which to generate a provisioning profile」「No profiles for '...' were found: ... iOS App Development provisioning profiles」で失敗する（開発用プロファイルは登録済みデバイスが必要なため）。`update_code_signing_settings(build_configurations: ["Release"], code_sign_identity: "Apple Distribution")`でReleaseだけ配布用証明書に上書きする。実際に初回CI実行で踏んだ不具合。
 
 ## 古いMacでのローカルデバッグの限界
 

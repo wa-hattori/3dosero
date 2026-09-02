@@ -63,6 +63,18 @@ platform :ios do
       team_id: ENV.fetch("ASC_TEAM_ID"),
     )
 
+    # プロジェクト生成時点の`CODE_SIGN_IDENTITY`が両Configurationとも
+    # 旧形式の"iPhone Developer"(=Development証明書)に固定されているため、
+    # archive時にも配布用ではなく開発用プロビジョニングプロファイルが要求され、
+    # 「Your team has no devices from which to generate a provisioning
+    # profile」で失敗する。Release configurationだけ"Apple Distribution"に
+    # 上書きする(実際にCIで踏んだ不具合)。
+    update_code_signing_settings(
+      path: XCODEPROJ_PATH,
+      build_configurations: ["Release"],
+      code_sign_identity: "Apple Distribution",
+    )
+
     # gym(build_app)はapp_store_connect_api_keyで取得した資格情報を
     # xcodebuildのクラウド署名(-allowProvisioningUpdates)へ自動転送しない
     # (fastlane公式でも「あったら便利だが未実装」として認識されている既知の制約。
