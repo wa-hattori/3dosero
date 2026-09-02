@@ -46,10 +46,25 @@ platform :ios do
       increment_build_number(xcodeproj: XCODEPROJ_PATH, build_number: ENV["BUILD_NUMBER"])
     end
 
+    # `npx cap add ios`が生成した直後のプロジェクトはCODE_SIGN_STYLE=Automaticだが
+    # DEVELOPMENT_TEAMが未設定のため、CI(誰もXcodeにApple IDでサインインしていない
+    # macOSランナー)では署名対象のチームが決まらずビルドが失敗する
+    # (「Signing for "App" requires a development team」)。ASC_TEAM_IDを
+    # DEVELOPMENT_TEAMとして明示的に書き込む。
+    update_code_signing_settings(
+      use_automatic_signing: true,
+      path: XCODEPROJ_PATH,
+      team_id: ENV.fetch("ASC_TEAM_ID"),
+    )
+
     build_app(
       scheme: "App",
       project: XCODEPROJ_PATH,
       export_method: "app-store",
+      export_team_id: ENV.fetch("ASC_TEAM_ID"),
+      # app_store_connect_api_key で設定した資格情報を使い、プロビジョニング
+      # プロファイルの作成・更新をxcodebuildに自動で行わせる(match未導入のため必須)。
+      xcargs: "-allowProvisioningUpdates",
     )
 
     upload_to_testflight(
