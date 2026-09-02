@@ -111,6 +111,15 @@ CLAUDE.mdの「配信」節に言う「将来的にはApp Storeでのネイテ�
 ```ruby
 default_platform(:ios)
 
+# `npx cap add ios`が生成するXcodeプロジェクトの実体は`ios-app/`直下ではなく
+# `ios-app/ios/App/App.xcodeproj`にある。fastlaneはこの`fastlane/`の親
+# (=`ios-app/`)をカレントディレクトリとして実行されるため、`agvtool`を使う
+# アクション(increment_version_number/increment_build_number)とbuild_appには
+# 必ず明示的にプロジェクトパスを渡す(渡さないと「カレントディレクトリに
+# .xcodeprojが無い」エラーになる。実際にCIで踏んだ不具合)。
+# Capacitor 8のSPM構成のため`.xcworkspace`は存在せず、`.xcodeproj`を直接指定する。
+XCODEPROJ_PATH = "ios/App/App.xcodeproj"
+
 platform :ios do
   desc "Build and upload a release build to TestFlight"
   lane :release do
@@ -121,10 +130,10 @@ platform :ios do
       is_key_content_base64: true,
     )
 
-    increment_version_number(version_number: ENV["MARKETING_VERSION"])
-    increment_build_number(build_number: ENV["BUILD_NUMBER"])
+    increment_version_number(xcodeproj: XCODEPROJ_PATH, version_number: ENV["MARKETING_VERSION"])
+    increment_build_number(xcodeproj: XCODEPROJ_PATH, build_number: ENV["BUILD_NUMBER"])
 
-    build_app(scheme: "App", export_method: "app-store")
+    build_app(scheme: "App", project: XCODEPROJ_PATH, export_method: "app-store")
 
     upload_to_testflight(
       api_key: api_key,
@@ -157,6 +166,7 @@ end
 2. **`appId`は登録後に事実上変更不可**。App Store Connectで最初にアプリを作成する前に、この文書とCLAUDE.mdの値が最終確定していることを確認する。
 3. **ビルド番号(`CFBundleVersion`)は同一アプリ内で後戻りできない**。`github.run_number`を使うことで、ワークフローを再実行しない限り自然に単調増加する前提を壊さないよう注意する。
 4. **初回のCI実行は高確率でデバッグが必要**。実際のmacOSランナー・Apple資格情報を使った初回実行までは、この文書の内容は未検証の設計である旨を認識しておく。
+5. **`agvtool`系アクション（`increment_version_number`/`increment_build_number`）・`build_app`には必ず`xcodeproj:`/`project:`でパスを明示する。** 実際に初回CI実行で`increment_version_number`が「カレントディレクトリに.xcodeprojが無い」エラーで失敗した（`ios-app/fastlane/Fastfile`のカレントディレクトリは`ios-app/`だが、Xcodeプロジェクトの実体は`ios-app/ios/App/App.xcodeproj`にあり一致しないため）。`ios-app/fastlane/Fastfile`の`XCODEPROJ_PATH`定数を参照。
 
 ## 古いMacでのローカルデバッグの限界
 

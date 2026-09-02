@@ -8,12 +8,23 @@
 
 default_platform(:ios)
 
+# `npx cap add ios`が生成するXcodeプロジェクトの実体は`ios-app/`直下ではなく
+# `ios-app/ios/App/App.xcodeproj`にある。fastlaneはこの`fastlane/`ディレクトリの
+# 親(=`ios-app/`)をカレントディレクトリとして実行されるため、`agvtool`を使う
+# アクション(increment_version_number/increment_build_number)には明示的に
+# `xcodeproj:`を渡す必要がある(渡さないと「カレントディレクトリに.xcodeprojが無い」
+# エラーになる)。build_appも同様に明示する。
+# なお本プロジェクトはCapacitor 8のSwift Package Manager構成のため
+# `.xcworkspace`は存在せず、`.xcodeproj`を直接指定する。
+XCODEPROJ_PATH = "ios/App/App.xcodeproj"
+
 platform :ios do
   desc "ローカル動作確認用: 自動署名でXcodeプロジェクトがビルドできることだけを確認する" \
        "(App Store Connect資格情報は不要。ios-app/README.mdのデバッグ手順から使う想定)"
   lane :build_local do
     build_app(
       scheme: "App",
+      project: XCODEPROJ_PATH,
       export_method: "development",
       output_directory: "./build",
     )
@@ -28,11 +39,16 @@ platform :ios do
       is_key_content_base64: true,
     )
 
-    increment_version_number(version_number: ENV["MARKETING_VERSION"]) if ENV["MARKETING_VERSION"]
-    increment_build_number(build_number: ENV["BUILD_NUMBER"]) if ENV["BUILD_NUMBER"]
+    if ENV["MARKETING_VERSION"]
+      increment_version_number(xcodeproj: XCODEPROJ_PATH, version_number: ENV["MARKETING_VERSION"])
+    end
+    if ENV["BUILD_NUMBER"]
+      increment_build_number(xcodeproj: XCODEPROJ_PATH, build_number: ENV["BUILD_NUMBER"])
+    end
 
     build_app(
       scheme: "App",
+      project: XCODEPROJ_PATH,
       export_method: "app-store",
     )
 
