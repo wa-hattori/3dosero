@@ -109,6 +109,9 @@ CLAUDE.mdの「配信」節に言う「将来的にはApp Storeでのネイテ�
 ## `ios-app/fastlane/Fastfile`（概要）
 
 ```ruby
+require "base64"
+require "tempfile"
+
 default_platform(:ios)
 
 # `npx cap add ios`が生成するXcodeプロジェクトの実体は`ios-app/`直下ではなく
@@ -123,9 +126,12 @@ XCODEPROJ_PATH = "ios/App/App.xcodeproj"
 platform :ios do
   desc "Build and upload a release build to TestFlight"
   lane :release do
+    key_id = ENV["ASC_KEY_ID"]
+    issuer_id = ENV["ASC_ISSUER_ID"]
+
     api_key = app_store_connect_api_key(
-      key_id: ENV["ASC_KEY_ID"],
-      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_id: key_id,
+      issuer_id: issuer_id,
       key_content: ENV["ASC_KEY_CONTENT"],
       is_key_content_base64: true,
     )
@@ -141,14 +147,26 @@ platform :ios do
       team_id: ENV["ASC_TEAM_ID"],
     )
 
+    # gym(build_app)はapp_store_connect_api_keyの資格情報をxcodebuildの
+    # クラウド署名(-allowProvisioningUpdates)へ自動転送しない(fastlane公式でも
+    # 「あったら便利だが未実装」として認識されている既知の制約。
+    # https://github.com/fastlane/fastlane/discussions/19973 )。
+    # .p8の内容を一時ファイルに書き出し、-authenticationKeyPath等をxcargsで
+    # 明示的に渡す。渡さないと「No Accounts: Add a new account in Accounts
+    # settings.」でローカルXcodeアカウントでの署名にフォールバックしようとして失敗する。
+    key_file = Tempfile.new(["asc_key", ".p8"])
+    key_file.write(Base64.decode64(ENV["ASC_KEY_CONTENT"]))
+    key_file.close
+
     build_app(
       scheme: "App",
       project: XCODEPROJ_PATH,
       export_method: "app-store",
       export_team_id: ENV["ASC_TEAM_ID"],
-      # app_store_connect_api_keyの資格情報でプロビジョニングプロファイルを
-      # 自動作成・更新させる(matchを導入していないため必須)。
-      xcargs: "-allowProvisioningUpdates",
+      xcargs: "-allowProvisioningUpdates " \
+              "-authenticationKeyPath '#{key_file.path}' " \
+              "-authenticationKeyID #{key_id} " \
+              "-authenticationKeyIssuerID #{issuer_id}",
     )
 
     upload_to_testflight(
@@ -183,7 +201,8 @@ end
 3. **ビルド番号(`CFBundleVersion`)は同一アプリ内で後戻りできない**。`github.run_number`を使うことで、ワークフローを再実行しない限り自然に単調増加する前提を壊さないよう注意する。
 4. **初回のCI実行は高確率でデバッグが必要**。実際のmacOSランナー・Apple資格情報を使った初回実行までは、この文書の内容は未検証の設計である旨を認識しておく。
 5. **`agvtool`系アクション（`increment_version_number`/`increment_build_number`）・`build_app`には必ず`xcodeproj:`/`project:`でパスを明示する。** 実際に初回CI実行で`increment_version_number`が「カレントディレクトリに.xcodeprojが無い」エラーで失敗した（`ios-app/fastlane/Fastfile`のカレントディレクトリは`ios-app/`だが、Xcodeプロジェクトの実体は`ios-app/ios/App/App.xcodeproj`にあり一致しないため）。`ios-app/fastlane/Fastfile`の`XCODEPROJ_PATH`定数を参照。
-6. **`npx cap add ios`直後の`App.xcodeproj`は`CODE_SIGN_STYLE=Automatic`だが`DEVELOPMENT_TEAM`が空**なので、誰もApple IDでサインインしていないCIランナーでは署名対象チームが決まらず`build_app`が「Signing for "App" requires a development team」で失敗する。`release`レーンで`update_code_signing_settings(team_id: ENV["ASC_TEAM_ID"])`を実行し、かつ`build_app`に`xcargs: "-allowProvisioningUpdates"`を渡すことで、`app_store_connect_api_key`の資格情報を使ってプロビジョニングプロファイルを自動作成・更新させる（`match`未導入のため必須の組み合わせ）。実際に初回CI実行で踏んだ不具合。
+6. **`npx cap add ios`直後の`App.xcodeproj`は`CODE_SIGN_STYLE=Automatic`だが`DEVELOPMENT_TEAM`が空**なので、誰もApple IDでサインインしていないCIランナーでは署名対象チームが決まらず`build_app`が「Signing for "App" requires a development team」で失敗する。`release`レーンで`update_code_signing_settings(team_id: ENV["ASC_TEAM_ID"])`を実行してこれを解消する。実際に初回CI実行で踏んだ不具合。
+7. **`build_app`（gym）は`app_store_connect_api_key`で取得した資格情報を、xcodebuildのクラウド署名（`-allowProvisioningUpdates`）へ自動転送しない。** `xcargs: "-allowProvisioningUpdates"`だけを渡しても、xcodebuildは資格情報を持たないためローカルXcodeアカウントでの署名にフォールバックしようとし、「No Accounts: Add a new account in Accounts settings.」「No profiles for '...' were found」で失敗する（fastlane公式でも「あったら便利だが未実装」として認識されている既知の制約。[GitHub Discussion #19973](https://github.com/fastlane/fastlane/discussions/19973)）。`.p8`の内容を一時ファイルに書き出し、`-authenticationKeyPath`/`-authenticationKeyID`/`-authenticationKeyIssuerID`をxcargsで明示的に渡す必要がある（`ios-app/fastlane/Fastfile`参照）。実際に初回CI実行で踏んだ不具合。
 
 ## 古いMacでのローカルデバッグの限界
 
