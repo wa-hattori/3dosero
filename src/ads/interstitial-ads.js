@@ -10,6 +10,9 @@
 
 import { INTERSTITIAL_AD_UNIT_ID } from './ad-config.js';
 import { shouldShowInterstitial } from './ad-frequency.js';
+// 【一時的な調査用】広告が表示されない原因調査用。原因判明後にこのimportと
+// 下記の`debugLog(...)`呼び出しをすべて削除し、`debug-overlay.js`自体も削除すること。
+import { debugLog } from './debug-overlay.js';
 
 let gamesCompletedThisSession = 0;
 let admobInitialized = false;
@@ -32,24 +35,36 @@ const isNativeIOS = () =>
  * @returns {Promise<void>}
  */
 export const notifyGameEnded = async () => {
+  debugLog(`notifyGameEnded called. isNativeIOS=${isNativeIOS()}`);
   if (!isNativeIOS()) return;
 
   gamesCompletedThisSession += 1;
-  if (!shouldShowInterstitial(gamesCompletedThisSession)) return;
+  const shouldShow = shouldShowInterstitial(gamesCompletedThisSession);
+  debugLog(`gamesCompletedThisSession=${gamesCompletedThisSession} shouldShow=${shouldShow}`);
+  if (!shouldShow) return;
 
   try {
+    debugLog('importing @capacitor-community/admob...');
     const { AdMob } = await import('@capacitor-community/admob');
+    debugLog(`import OK. AdMob=${typeof AdMob}`);
 
     if (!admobInitialized) {
       // ATT許可ダイアログ・UMP同意フォーム（EEA/UK/スイス向け）はここでハンドリングされる。
+      debugLog('calling AdMob.initialize()...');
       await AdMob.initialize();
       admobInitialized = true;
+      debugLog('AdMob.initialize() OK');
     }
 
+    debugLog(`calling AdMob.prepareInterstitial({adId: ${INTERSTITIAL_AD_UNIT_ID}})...`);
     await AdMob.prepareInterstitial({ adId: INTERSTITIAL_AD_UNIT_ID });
+    debugLog('prepareInterstitial() OK. calling showInterstitial()...');
     await AdMob.showInterstitial();
+    debugLog('showInterstitial() OK');
   } catch (error) {
     // 広告の表示失敗はゲーム体験を妨げるべきではないため、握りつぶして続行する。
     console.error('インタースティシャル広告の表示に失敗しました', error);
+    debugLog(`ERROR: ${error?.name ?? '?'}: ${error?.message ?? String(error)}`);
+    debugLog(`ERROR stack: ${error?.stack ?? '(none)'}`.slice(0, 500));
   }
 };
