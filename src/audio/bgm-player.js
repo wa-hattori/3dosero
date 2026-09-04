@@ -79,5 +79,17 @@ export const createBgmPlayer = () => {
     currentTrack = null;
   };
 
+  // アプリがバックグラウンドに回った際（iOSアプリでホームに戻る／他アプリに切り替える等）に
+  // BGMが鳴り続けないよう一時停止し、フォアグラウンドに戻ったら再開する。Capacitorの
+  // WKWebViewでも`visibilitychange`はアプリのバックグラウンド/フォアグラウンド遷移で
+  // 発火するため、追加の依存（`@capacitor/app`等）なしにこの標準APIだけで対応できる。
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      audio.pause();
+      return;
+    }
+    if (currentTrack !== null) audio.play().catch(() => {});
+  });
+
   return { play, setMuted, stop };
 };
