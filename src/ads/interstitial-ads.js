@@ -10,37 +10,20 @@
 
 import { INTERSTITIAL_AD_UNIT_ID } from './ad-config.js';
 import { shouldShowInterstitial } from './ad-frequency.js';
+// 【一時的な調査用・第3ラウンド】esm.sh切り替え後もまだ広告が出ないため、
+// AdMob初期化〜表示までの各ステップを再度詳しく調査する。原因判明後にこのimportと
+// 下記の`debugLog(...)`呼び出しをすべて削除し、`debug-overlay.js`自体も削除すること。
+import { debugLog } from './debug-overlay.js';
 
-/**
- * 対局完了数を保持する`sessionStorage`のキー。「タイトルに戻る」ボタンが
- * `window.location.reload()`でページを再読み込みする設計（[end-screen](../ui/end-screen.js)
- * 参照）のため、メモリ上の変数だけでは新しい対局を始めるたびにカウントが0に
- * リセットされてしまい、`AD_INTERSTITIAL_FREQUENCY`局に到達することが永遠にない
- * （実機のTestFlightフィードバックで発見した不具合）。`sessionStorage`はページの
- * 再読み込みでは消えず、アプリの完全終了（タブ/ウィンドウを閉じる相当）で消えるため、
- * 「アプリ起動中は保持、再起動でリセット」という元々の意図通りの挙動になる。
- */
 const SESSION_STORAGE_KEY = 'gamesCompletedThisSession';
 
 let admobInitialized = false;
 
-/**
- * iOSのCapacitorネイティブシェル上で実行されているかどうかを判定する。
- * `window.Capacitor`はネイティブシェル内でのみ自動的に注入されるグローバルなので、
- * Web版では常に`false`を返す。
- * @returns {boolean} iOSネイティブシェル上での実行なら`true`
- */
 const isNativeIOS = () =>
   typeof window !== 'undefined' &&
   window.Capacitor?.isNativePlatform?.() === true &&
   window.Capacitor?.getPlatform?.() === 'ios';
 
-/**
- * 対局完了数をインクリメントして`sessionStorage`に書き戻し、更新後の値を返す。
- * プライベートブラウジング等で`sessionStorage`が使えない環境でも、広告表示を
- * 諦めるだけでゲーム自体は継続できるようにフォールバックする。
- * @returns {number} インクリメント後の対局完了数
- */
 const incrementGamesCompletedThisSession = () => {
   try {
     const current = Number(sessionStorage.getItem(SESSION_STORAGE_KEY)) || 0;
@@ -53,30 +36,58 @@ const incrementGamesCompletedThisSession = () => {
 };
 
 /**
- * 対局が1つ終了したことを通知する。Web版では何もしない。iOS版では、
- * `AD_INTERSTITIAL_FREQUENCY`局に1回の頻度でインタースティシャル広告を表示する。
- * 広告の初期化（ATT許可・UMP同意フローを含む）は初回のみ行う。
- * @returns {Promise<void>}
+ * エラーオブジェクトの自前挙動を可能な限り漏れなく文字列化する。AdMob/Capacitorの
+ * エラーはプレーンな`Error`ではなくプラグイン独自の形（`{code, message}`のみで
+ * `name`/`stack`を持たない等）のことがあるため、複数の手段を試す。
+ * @param {unknown} error
+ * @returns {string}
  */
+const describeError = (error) => {
+  try {
+    const own = JSON.stringify(error, Object.getOwnPropertyNames(error ?? {}));
+    return `own=${own}`;
+  } catch {
+    return `String(error)=${String(error)}`;
+  }
+};
+
 export const notifyGameEnded = async () => {
+  debugLog(`notifyGameEnded called. isNativeIOS=${isNativeIOS()}`);
   if (!isNativeIOS()) return;
 
   const gamesCompleted = incrementGamesCompletedThisSession();
-  if (!shouldShowInterstitial(gamesCompleted)) return;
+  const shouldShow = shouldShowInterstitial(gamesCompleted);
+  debugLog(`gamesCompleted=${gamesCompleted} shouldShow=${shouldShow}`);
+  if (!shouldShow) return;
 
   try {
-    const { AdMob } = await import('@capacitor-community/admob');
+    debugLog('importing @capacitor-community/admob...');
+    const admobModule = await import('@capacitor-community/admob');
+    debugLog(`import OK. keys=${Object.keys(admobModule).join(',')}`);
+    const { AdMob } = admobModule;
+    debugLog(`AdMob=${typeof AdMob} methods=${AdMob ? Object.keys(AdMob).join(',') : '(none)'}`);
 
     if (!admobInitialized) {
-      // ATT許可ダイアログ・UMP同意フォーム（EEA/UK/スイス向け）はここでハンドリングされる。
-      await AdMob.initialize();
+      debugLog('calling AdMob.initialize()...');
+      const initResult = await AdMob.initialize();
       admobInitialized = true;
+      debugLog(`AdMob.initialize() OK. result=${JSON.stringify(initResult)}`);
+    } else {
+      debugLog('AdMob already initialized, skipping initialize()');
     }
 
-    await AdMob.prepareInterstitial({ adId: INTERSTITIAL_AD_UNIT_ID });
-    await AdMob.showInterstitial();
+    debugLog(`adUnitId=${INTERSTITIAL_AD_UNIT_ID}`);
+    debugLog('calling AdMob.prepareInterstitial()...');
+    const prepareResult = await AdMob.prepareInterstitial({ adId: INTERSTITIAL_AD_UNIT_ID });
+    debugLog(`prepareInterstitial() OK. result=${JSON.stringify(prepareResult)}`);
+
+    debugLog('calling AdMob.showInterstitial()...');
+    const showResult = await AdMob.showInterstitial();
+    debugLog(`showInterstitial() OK. result=${JSON.stringify(showResult)} (ad should be visible now)`);
   } catch (error) {
-    // 広告の表示失敗はゲーム体験を妨げるべきではないため、握りつぶして続行する。
     console.error('インタースティシャル広告の表示に失敗しました', error);
+    debugLog(`ERROR name=${error?.name ?? '?'} code=${error?.code ?? '?'}`);
+    debugLog(`ERROR message=${error?.message ?? '(no message)'}`);
+    debugLog(`ERROR ${describeError(error)}`);
   }
 };
