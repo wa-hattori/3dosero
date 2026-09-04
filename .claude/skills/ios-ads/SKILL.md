@@ -17,12 +17,17 @@ description: iOSアプリ版でのインタースティシャル広告（AdMob�
 
 ## なぜCapacitor pluginをビルドツールなしで使えるか
 
-`@capacitor-community/admob`（8.1.0）とその依存先`@capacitor/core`（8.5.0）は、いずれも jsdelivr 経由でESモジュールとして配信されていることを確認済み（`three`/`onnxruntime-web`/`firebase`と同じCDN方式）:
+`@capacitor-community/admob`（8.1.0）は **esm.sh** 経由でESモジュールとして読み込む:
 
 ```
-https://cdn.jsdelivr.net/npm/@capacitor/core@8.5.0/dist/index.js
-https://cdn.jsdelivr.net/npm/@capacitor-community/admob@8.1.0/dist/esm/index.js
+https://esm.sh/@capacitor-community/admob@8.1.0
 ```
+
+**jsdelivr（`https://cdn.jsdelivr.net/npm/...`）ではなくesm.shを使う理由（実際に踏んだ不具合）**: jsdelivrはnpmパッケージの`dist/`をそのまま配信するだけなので、パッケージのビルド成果物が`from './definitions'`のような**拡張子なしの相対import**を含んでいると、バンドラ経由なら問題にならないが、ブラウザネイティブのESモジュール解決ではそのまま`.../definitions`という拡張子なしのURLを取得しようとして404になり、`import()`全体が`TypeError: Importing a module script failed.`で失敗する。実際に`@capacitor-community/admob`の`dist/esm/index.js`が`./definitions`・`./banner/index`等の拡張子なし相対importを大量に持っており、これが原因でiOS実機で広告が一度も表示されない不具合になった（TestFlightの実機テストで発覚。`curl`で`.../definitions`が404、`.../definitions.js`が200になることで確認）。
+
+esm.shは依存関係を解決・バンドルした上で配信するため、この種の拡張子省略import問題が起きない。`@capacitor/core`（Capacitorのネイティブブリッジ）はesm.sh側が`@capacitor-community/admob`の内部でpeer dependencyとして自動解決するため、こちらのimportmapに`@capacitor/core`を個別に登録する必要はない（`window.Capacitor`自体はCapacitorのネイティブ実行時にグローバルへ注入されるものなので、JSパッケージ側がjsdelivr/esm.shのどちらから来ても実体は共有される）。
+
+**教訓**: 複数ファイルで構成される（＝内部で相対importし合う）npmパッケージをビルドツールなしでCDNから直接importする場合は、jsdelivrで最初の1ファイルが200で取得できることを確認するだけでは不十分。実際に`import()`してみる（または`curl`でパッケージの相対import先を辿る）まで、拡張子省略importの罠に気づけない。単一ファイル完結のパッケージ（`three`の`three.module.js`等）ではこの問題は起きない。
 
 ## モジュール構成（`src/ads/`）
 
@@ -105,3 +110,4 @@ Googleが公式に配布している、実際の広告を消費しない安全�
 2. **Web版での誤動作防止**: `isNativeIOS()`のチェックを必ず先頭で行い、Web版では`@capacitor-community/admob`のfetchすら発生しないことをコードレビューで確認する。
 3. **オンライン対戦との組み合わせ**: オンライン対戦の終局は`subscribeToRoom`のコールバック側で検知されるため、ローカル対戦・CPU対戦の終局検知（`applyMoveAndAdvance`）と両方から`notifyGameEnded()`を呼ぶ必要がある。呼び忘れに注意。
 4. **【実際に踏んだ不具合】対局完了カウンタをメモリ上の変数（`let`）にすると、広告が実機で永遠に表示されない。** [end-screen](../../../src/ui/end-screen.js)の「タイトルに戻る」・[title-button](../../../src/ui/title-button.js)の「タイトルに戻る」は、いずれもThree.jsリソースの確実な解放のため`window.location.reload()`でページを再読み込みする設計になっている。新しい対局を始めるには必ずこの経路を通るため、メモリ上のカウンタは**毎回0にリセットされ、`AD_INTERSTITIAL_FREQUENCY`局に到達することが構造的に不可能**になる。TestFlightの実機テスト（3局連続プレイしても広告が1回も出ない）で発覚。対処として`sessionStorage`に保存するよう変更した（ページ再読み込みでは消えず、アプリの完全終了で消えるため、意図通り「アプリ起動中は保持・再起動でリセット」の挙動になる）。**この種の機能（ページ再読み込みをまたいで状態を持たせたいもの）を今後追加する場合は、必ずこの制約を思い出すこと。**
+5. **【実際に踏んだ不具合】jsdelivrから`@capacitor-community/admob`を読み込むと、実機で`import()`自体が失敗する。** 上記のカウンタ修正後もなお広告が出ず、実機で画面上デバッグログを取って判明した。原因は「なぜCapacitor pluginをビルドツールなしで使えるか」節に記載の通り、jsdelivrが配信するパッケージのビルド成果物に拡張子なしの相対importが含まれているため。esm.shへの切り替えで解消した。**「1ファイル目がjsdelivrで200 OKだった」だけではCDN経由importの動作確認として不十分**という教訓は、今後別のnpmパッケージをCDN直import方式で追加する際にも当てはまる。
