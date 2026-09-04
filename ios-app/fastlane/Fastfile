@@ -69,7 +69,15 @@ platform :ios do
     # 「Your team has no devices from which to generate a provisioning
     # profile」で失敗する。Release configurationだけ"Apple Distribution"に
     # 上書きする(実際にCIで踏んだ不具合)。
+    #
+    # `use_automatic_signing:`はデフォルトが`false`で、かつこのアクションは
+    # 呼び出すたびに`CODE_SIGN_STYLE`を無条件で書き込む(渡さなかった項目だけ
+    # 前回の値を保持、というわけではない)。省略すると直前の呼び出しで
+    # Automaticにしたはずの設定がManualに上書きされ、「App requires a
+    # provisioning profile」で即失敗する(実際にCIで踏んだ不具合。ネットワーク
+    # 通信すら発生しないのが手がかりだった)。
     update_code_signing_settings(
+      use_automatic_signing: true,
       path: XCODEPROJ_PATH,
       build_configurations: ["Release"],
       code_sign_identity: "Apple Distribution",

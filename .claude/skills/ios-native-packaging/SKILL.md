@@ -152,7 +152,13 @@ platform :ios do
     # 配布用ではなく開発用プロビジョニングプロファイルが要求され「Your team has
     # no devices from which to generate a provisioning profile」で失敗する。
     # Releaseだけ"Apple Distribution"に上書きする。
+    #
+    # use_automatic_signing:はデフォルトfalseで、かつこのアクションは呼び出す
+    # たびにCODE_SIGN_STYLEを無条件で書き込む(省略しても前回の値を保持しない)。
+    # ここで省略すると直前の呼び出しでAutomaticにした設定がManualに戻り、
+    # 「App requires a provisioning profile」で即失敗する。
     update_code_signing_settings(
+      use_automatic_signing: true,
       path: XCODEPROJ_PATH,
       build_configurations: ["Release"],
       code_sign_identity: "Apple Distribution",
@@ -215,6 +221,7 @@ end
 6. **`npx cap add ios`直後の`App.xcodeproj`は`CODE_SIGN_STYLE=Automatic`だが`DEVELOPMENT_TEAM`が空**なので、誰もApple IDでサインインしていないCIランナーでは署名対象チームが決まらず`build_app`が「Signing for "App" requires a development team」で失敗する。`release`レーンで`update_code_signing_settings(team_id: ENV["ASC_TEAM_ID"])`を実行してこれを解消する。実際に初回CI実行で踏んだ不具合。
 7. **`build_app`（gym）は`app_store_connect_api_key`で取得した資格情報を、xcodebuildのクラウド署名（`-allowProvisioningUpdates`）へ自動転送しない。** `xcargs: "-allowProvisioningUpdates"`だけを渡しても、xcodebuildは資格情報を持たないためローカルXcodeアカウントでの署名にフォールバックしようとし、「No Accounts: Add a new account in Accounts settings.」「No profiles for '...' were found」で失敗する（fastlane公式でも「あったら便利だが未実装」として認識されている既知の制約。[GitHub Discussion #19973](https://github.com/fastlane/fastlane/discussions/19973)）。`.p8`の内容を一時ファイルに書き出し、`-authenticationKeyPath`/`-authenticationKeyID`/`-authenticationKeyIssuerID`をxcargsで明示的に渡す必要がある（`ios-app/fastlane/Fastfile`参照）。実際に初回CI実行で踏んだ不具合。
 8. **`npx cap add ios`直後の`App.xcodeproj`は`CODE_SIGN_IDENTITY`が両Configuration（Debug/Release）とも旧形式の`"iPhone Developer"`（＝Development証明書）に固定されている。** これによりarchive時にも配布用ではなく開発用のプロビジョニングプロファイルが要求され、「Communication with Apple failed: Your team has no devices from which to generate a provisioning profile」「No profiles for '...' were found: ... iOS App Development provisioning profiles」で失敗する（開発用プロファイルは登録済みデバイスが必要なため）。`update_code_signing_settings(build_configurations: ["Release"], code_sign_identity: "Apple Distribution")`でReleaseだけ配布用証明書に上書きする。実際に初回CI実行で踏んだ不具合。
+9. **`update_code_signing_settings`の`use_automatic_signing:`はデフォルト`false`で、かつこのアクションは呼び出すたびに`CODE_SIGN_STYLE`を無条件で書き込む。** 「渡さなかったパラメータは前回の値を保持する」という選択的な挙動をするのは`team_id`/`code_sign_identity`など個別項目だけで、`CODE_SIGN_STYLE`自体は常に`use_automatic_signing`の値（省略時は`false`＝Manual）で上書きされる。そのため、同じ`path`/`build_configurations`に対してこのアクションを複数回呼ぶ場合は**毎回**`use_automatic_signing: true`を明示する必要がある。省略すると直前の呼び出しでAutomaticにしたはずの設定がManualに戻り、ネットワーク通信すら発生せず「"App" requires a provisioning profile. Select a provisioning profile in the Signing & Capabilities editor.」で即失敗する。実際に初回CI実行で踏んだ不具合。
 
 ## 古いMacでのローカルデバッグの限界
 
