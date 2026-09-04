@@ -43,9 +43,10 @@ const cpuLevelLabel = (level) => {
  * ランダムマッチングまで完了させてから `onStart` を呼ぶ（対局画面側は接続済みの
  * 状態を受け取るだけでよい）。選択が完了すると自身をDOMから取り除く。
  * @param {HTMLElement} container - 追加先要素
- * @param {(selection: { battleMode: string, boardSize: number, cpuLevel: number | null, online: { roomId: string, color: number } | null }) => void} onStart -
+ * @param {(selection: { battleMode: string, boardSize: number, cpuLevel: number | null, online: { roomId: string, color: number } | null, humanColor: number | null }) => void} onStart -
  *   選択完了時に呼ばれる。`cpuLevel` はCPU対戦モード以外では `null`。`online` は
- *   オンライン対戦モードでの接続確立後のみ非`null`（`roomId`と自分の色）
+ *   オンライン対戦モードでの接続確立後のみ非`null`（`roomId`と自分の色）。`humanColor` は
+ *   CPU対戦モードで人間が選んだ先手/後手の色（`BLACK`/`WHITE`）で、それ以外のモードでは`null`
  * @param {() => void} [onFirstInteraction] - モード選択ボタンの最初のクリック時に呼ばれる。
  *   `<audio>.play()`はブラウザの自動再生ポリシー上、ボタン自身のクリックハンドラ内など
  *   ユーザー操作に直接応答する形で同期的に呼ばれた場合に最も確実に許可される
@@ -81,6 +82,9 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
 
   let selectedBattleMode = null;
   let selectedBoardSize = null;
+  // CPU対戦の難易度は先手/後手選択ステップを挟んでから`finishSelection`に渡すため、
+  // 選択直後は一旦ここに保持しておく。
+  let selectedCpuLevel = null;
   // 「戻る」ボタンは1つ前のステップに戻す必要があるため、現在のステップを覚えておく。
   let currentStep = 'mode';
   // オンライン対戦の待機中(部屋作成・ランダムマッチング)はFirestoreを購読するため、
@@ -122,10 +126,39 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     errorMessage.textContent = '';
   };
 
-  const finishSelection = ({ cpuLevel = null, online = null } = {}) => {
+  const finishSelection = ({ cpuLevel = null, online = null, humanColor = null } = {}) => {
     stopActiveSubscription();
     dispose();
-    onStart({ battleMode: selectedBattleMode, boardSize: selectedBoardSize, cpuLevel, online });
+    onStart({
+      battleMode: selectedBattleMode,
+      boardSize: selectedBoardSize,
+      cpuLevel,
+      online,
+      humanColor,
+    });
+  };
+
+  const showPlayerColorStep = () => {
+    subtitle.textContent = '先手（黒）と後手（白）どちらでプレイしますか？';
+    backButton.hidden = false;
+    backButton.textContent = '← 難易度選択に戻る';
+    currentStep = 'playerColor';
+    clearButtons();
+
+    const colorChoices = [
+      { color: BLACK, label: '先手（黒）でプレイ' },
+      { color: WHITE, label: '後手（白）でプレイ' },
+    ];
+    for (const { color, label } of colorChoices) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.addEventListener('click', () => {
+        playClickSound();
+        finishSelection({ cpuLevel: selectedCpuLevel, humanColor: color });
+      });
+      buttonRow.appendChild(button);
+    }
   };
 
   const showCpuLevelStep = () => {
@@ -141,7 +174,8 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
       button.textContent = cpuLevelLabel(level);
       button.addEventListener('click', () => {
         playClickSound();
-        finishSelection({ cpuLevel: level });
+        selectedCpuLevel = level;
+        showPlayerColorStep();
       });
       buttonRow.appendChild(button);
     }
@@ -325,6 +359,10 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
 
   backButton.addEventListener('click', () => {
     playClickSound();
+    if (currentStep === 'playerColor') {
+      showCpuLevelStep();
+      return;
+    }
     if (currentStep === 'cpuLevel' || currentStep === 'onlineMethod') {
       showBoardSizeStep();
       return;
@@ -341,6 +379,7 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     }
     selectedBattleMode = null;
     selectedBoardSize = null;
+    selectedCpuLevel = null;
     showBattleModeStep();
   });
 

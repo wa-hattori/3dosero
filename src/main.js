@@ -1,4 +1,4 @@
-import { createInitialBoard, BLACK, WHITE, oppositeColor } from './logic/board.js';
+import { createInitialBoard, BLACK, oppositeColor } from './logic/board.js';
 import { getValidMoves, applyMove } from './logic/flip-rule.js';
 import { getNextTurn, getWinner, countStones } from './logic/game-state.js';
 import { chooseRandomMove, RANDOM_CPU_LEVEL } from './logic/cpu.js';
@@ -31,8 +31,8 @@ const BATTLE_STARFIELD_COLORS = {
   online: 0xff5555,
 };
 
-/** CPU対戦モードでCPUが受け持つ色。人間は先手の黒を受け持つ。 */
-const CPU_COLOR = WHITE;
+/** CPU対戦モードで、人間が色を選ばなかった場合のデフォルト（先手の黒）。 */
+const DEFAULT_HUMAN_COLOR = BLACK;
 /** CPUが着手するまでの間（考えているように見せるための演出）。 */
 const CPU_MOVE_DELAY_MS = 700;
 
@@ -79,10 +79,10 @@ createVersionBadge(uiOverlay);
  * 3Dシーン・ゲーム状態・UIを一式構築する。オンライン対戦モードでは、盤面の実体は
  * Firestore側にあり、ここでの`board`/`currentTurn`等はその購読結果のミラーに過ぎない
  * （[online-multiplayer](../.claude/skills/online-multiplayer/SKILL.md)参照）。
- * @param {{ battleMode: string, boardSize: number, cpuLevel: number | null, online: { roomId: string, color: number } | null }} selection -
+ * @param {{ battleMode: string, boardSize: number, cpuLevel: number | null, online: { roomId: string, color: number } | null, humanColor: number | null }} selection -
  *   スタート画面での選択内容
  */
-const startGame = ({ battleMode, boardSize, cpuLevel, online }) => {
+const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
   heroScene.stop();
   heroCanvas.style.display = 'none';
   bgmPlayer.play('battle');
@@ -108,8 +108,11 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online }) => {
 
   /** オンライン対戦での自分の色。オンライン対戦以外では`null`。 */
   const myOnlineColor = battleMode === 'online' ? online.color : null;
+  /** CPU対戦モードでCPUが受け持つ色。スタート画面で選んだ人間の色の逆。 */
+  const cpuColor =
+    battleMode === 'cpu' ? oppositeColor(humanColor ?? DEFAULT_HUMAN_COLOR) : null;
 
-  const isCpuTurn = () => battleMode === 'cpu' && currentTurn === CPU_COLOR;
+  const isCpuTurn = () => battleMode === 'cpu' && currentTurn === cpuColor;
   const isWaitingForOpponentOnline = () =>
     battleMode === 'online' && currentTurn !== myOnlineColor;
 
@@ -155,11 +158,16 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online }) => {
       // ONNX推論は非同期（モデルの初回ロードを含む）だが、`isCpuTurn`によるステータス表示
       // （「CPU思考中…」）は着手が反映されるまで継続するため、待ち時間が伸びてもUIは
       // フリーズしない。失敗時は`resolveCpuMove`内でランダムな着手にフォールバックする。
-      const move = await resolveCpuMove(board, CPU_COLOR, boardSize, cpuLevel);
+      const move = await resolveCpuMove(board, cpuColor, boardSize, cpuLevel);
       if (move === null) return;
       applyMoveAndAdvance(move);
     }, CPU_MOVE_DELAY_MS);
   };
+
+  // 人間が後手（白）を選んだ場合、CPU（黒）が先手として最初の一手を打つ必要がある。
+  // それ以外の手番進行は`applyMoveAndAdvance`末尾からの呼び出しでまかなえるが、
+  // ゲーム開始直後だけはここで明示的にきっかけを作る必要がある。
+  scheduleCpuMoveIfNeeded();
 
   /**
    * 指定した座標に現在の手番の色で着手し、盤面・手番・終了判定を進めて再描画する。
