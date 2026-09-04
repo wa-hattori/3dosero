@@ -73,6 +73,35 @@ Added flip logic.
 - 動作確認が取れた時点（テストが通った、手動確認で意図通り動いた）で即コミットする。作業をまとめて最後に1つの大きなコミットにしない。
 - WIP（作業途中）コミットは残さない。中断する場合でも、その時点までの変更を意味のある単位に分割してコミットする。
 
+## この開発環境（Claude Code）からのpush権限
+
+デフォルトでは、この開発環境（Linux/WSL2のサンドボックス）にはGitHubへの書き込み認証情報が一切設定されていない（`gh auth status`は未ログイン、`git push`は`https://`リモートに対して認証エラーになる）。通常の開発ではユーザー自身がpush/マージを行うため問題にならないが、**CIワークフローのデバッグのように「小さな修正→push→CI実行→ログ確認」を何十回も繰り返す局面**では、毎回ユーザーに仲介してもらうのがボトルネックになる（実例: [ios-native-packaging](../../skills/ios-native-packaging/SKILL.md)のTestFlightパイプラインデバッグで、10回以上のCI実行サイクルを要した）。
+
+そのような局面でユーザーから明示的にpush権限の委譲を依頼された場合、以下の手順でこの環境専用のSSH Deploy Keyを設定する。
+
+1. **この環境専用の新しいSSH鍵ペアを生成する**（`~/.ssh/id_ed25519`など、既存の鍵を流用しない）。ユーザーの個人アカウント鍵など、既に別の場所で使われている鍵をそのまま登録しようとすると、GitHub側で「Key is already in use」エラーになる。
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_<repo>_ci -N "" -C "claude-code-<repo>-ci"
+   ```
+2. **`~/.ssh/config`にこのリポジトリ専用のHostエイリアスを追加する**（`github.com`自体を上書きしない。ユーザーが同じ環境で自分のGitHub個人鍵も使っている可能性があるため）。
+   ```
+   Host github.com-<repo>
+     HostName github.com
+     User git
+     IdentityFile ~/.ssh/id_ed25519_<repo>_ci
+     IdentitiesOnly yes
+   ```
+3. **公開鍵をユーザーに渡し、対象リポジトリの Settings → Deploy keys で「Allow write access」付きで登録してもらう。** 公開鍵は機密情報ではないためチャットにそのまま貼ってよい。秘密鍵はこの環境の外に一切出さない。
+4. `git remote set-url origin git@github.com-<repo>:<owner>/<repo>.git` でリモートをSSH経由に切り替える。
+5. Deploy Keyはリポジトリ単位のアクセスに限定され、不要になればGitHub側でいつでも即時無効化できる。PAT（Personal Access Token）よりスコープが狭く安全なため、この用途ではPATより優先する。
+
+### この方式でできないこと
+
+SSH Deploy Keyは**gitのpush/pull（Git Smart HTTP/SSHプロトコル）のみ**を認証する。GitHub Actionsのワークフロー起動（`workflow_dispatch`）やPull Requestの作成・マージなど、**GitHub REST/GraphQL API経由の操作には別途`gh auth login`相当のトークンが必要**であり、SSH鍵だけでは代替できない。そのため:
+
+- ブランチのマージは、GitHub上のPRを介さず**ローカルで`git merge`してから`main`に直接push**する形になる（`gh pr create`/`gh pr merge`は使えない）。マージコミットは「Merge pull request #N from ...」ではなく「Merge branch '...' into main」という表記になるが、動作上の違いはない。
+- Environmentに「Required reviewers」保護ルールを設定している場合（[ios-native-packaging](../../skills/ios-native-packaging/SKILL.md)の`app-store-release`など）、ワークフロー実行前の承認は引き続きユーザーがGitHub UI上で行う必要がある。これは意図的な安全装置であり、APIトークンを追加したとしても回避すべきではない。
+
 ## バージョンタグ運用
 
 コミット単位のAngular規約とは別に、「完成した」節目に対してのみGitHubタグでバージョンを付与する。**毎コミットでタグを切るわけではない。**

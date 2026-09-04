@@ -82,7 +82,7 @@ CLAUDE.mdの「配信」節に言う「将来的にはApp Storeでのネイテ�
 
 証明書・プロビジョニングプロファイルを別リポジトリで管理する`fastlane match`は個人開発には過剰なため、**App Store Connect APIキー + Xcodeの自動署名（`xcodebuild -allowProvisioningUpdates`相当）**を使う。APIキーはApp Store Connect側で生成する非対話的な認証情報で、Apple IDのパスワード・2要素認証をCIに持ち込まずに済む。
 
-必要なGitHub Secrets（すべてリポジトリのSettings → Secrets and variables → Actionsで設定。値の生成手順はApple Developer Program登録後に別途案内する）:
+必要なGitHub Secrets（すべてリポジトリのSettings → Secrets and variables → Actionsで設定。値の生成手順は[Apple Developer Program登録から初回TestFlightアップロードまでのチェックリスト](#apple-developer-program登録から初回testflightアップロードまでのチェックリスト)参照）:
 
 | Secret名 | 内容 |
 |---|---|
@@ -200,21 +200,37 @@ end
 
 アプリ名・サブタイトル・説明文・キーワード・カテゴリ・審査ノートなどの下書きは [ios-app/app-store-listing.md](../../../ios-app/app-store-listing.md) にまとめてある。App Store Connectでアプリを登録する際はそこからコピーして使う。
 
-## Apple Developer Program登録
+## Apple Developer Program登録から初回TestFlightアップロードまでのチェックリスト
 
-このスキルの対象外。取得手順はユーザーからの依頼があった時点で別途案内する。
+実際にゼロから初回成功までたどった手順。将来、別アカウント・別アプリで同じ道のりを踏む場合はこの順で進める（前工程が終わっていないと次工程に進めない依存関係があるため、順序を変えない）。
+
+1. **Apple Developer Programへの登録・承認を待つ。**（Apple審査、数日〜要すことがある）
+2. **Bundle ID（App ID）を登録する。** [developer.apple.com/account/resources/identifiers/list](https://developer.apple.com/account/resources/identifiers/list) → `+` → App IDs → App → Bundle ID: Explicit・`com.wahattori.threedosero` → Capabilitiesは何もチェックしない（[App ID登録時のCapabilities](#app-id登録時のcapabilities)節参照）。
+3. **App Store Connectでアプリを作成する。** [appstoreconnect.apple.com/apps](https://appstoreconnect.apple.com/apps) → `+` → New App → Bundle IDは手順2で登録したものを選択（登録済みでないと選択肢に出てこない）。
+4. **App Store Connect APIキーを発行する。** [appstoreconnect.apple.com/access/integrations/api](https://appstoreconnect.apple.com/access/integrations/api) → Generate API Key → **Access: Admin**（後述「APIキーの権限」参照。App Managerでは足りない可能性がある）→ `.p8`ファイルをダウンロード（**この画面でしか取得できない**）・Key ID・Issuer IDを記録する。
+5. **GitHub Secretsを4つ設定する。** `ASC_KEY_ID` / `ASC_ISSUER_ID` / `ASC_KEY_CONTENT`（`.p8`をbase64化: `base64 -w0 AuthKey_XXXX.p8`）/ `ASC_TEAM_ID`。詳細は[署名: App Store Connect APIキー方式](#署名-app-store-connect-apiキー方式)節。
+6. **デバイスを最低1台登録する。** [developer.apple.com/account/resources/devices/list](https://developer.apple.com/account/resources/devices/list) → `+` → 手元のiPhoneのUDID等を登録する。**これを飛ばすと初回archiveが必ず失敗する**（後述「デバイス登録が必須」参照）。App Store配布が目的でも、archive処理自体はDevelopment用プロビジョニングプロファイルの発行可否も検証するため。
+7. **`app-store-release` EnvironmentにRequired reviewersを設定する。** GitHub Settings → Environments → `app-store-release` → Required reviewers（[CI: .github/workflows/ios-release.yml](#ci-githubworkflowsios-releaseyml)節）。
+8. **`ios-release.yml`を`workflow_dispatch`で手動起動し、承認する。** 初回成功までデバッグが数ラウンド発生する前提でよい（下記「エッジケース・注意点」に既知の不具合と対処を記録済み）。
+
+### APIキーの権限（Admin vs App Manager）
+
+配布用証明書のクラウド署名にはApp Store Connect APIキーに**Admin**権限が必要、という報告が複数のApple Developer Forumsスレッドにある（[Apple Developer Forums #698117](https://developer.apple.com/forums/thread/698117)、[fastlane Discussion #19973](https://github.com/fastlane/fastlane/discussions/19973)）。
+
+ただし実際にこのプロジェクトで踏んだ不具合は、**App Managerキーのときと、Adminキーに切り替えた後（デバイス未登録の間）とで、どちらも全く同じ「Your team has no devices from which to generate a provisioning profile」エラーが再現しており**、最終的にエラーが解消したのは「デバイスを1台登録した」ことによる（下記「デバイス登録が必須」参照）。つまり**Admin権限への切り替えが実際に必要だったのかは、このプロジェクトの実験だけでは確証が取れていない**（App Managerキーのままデバイスを登録した場合にどうなるかは未検証）。それでも、Apple公式フォーラムの複数の報告と一致する挙動（配布用証明書のクラウド管理にはAdmin相当の権限が必要）を踏まえ、**新規に発行する際はAdminにしておくことを推奨する**（発行し直しの手間を考えると、最初からAdminにしておく方が安全側に倒せるため）。
 
 ## エッジケース・注意点
 
 1. **`ios-app/ios/`はコミット対象**（Xcodeプロジェクトファイル一式）だが、`ios-app/www/`（Web資産のコピー）と`ios-app/node_modules/`は`.gitignore`で除外する生成物。
 2. **`appId`は登録後に事実上変更不可**。App Store Connectで最初にアプリを作成する前に、この文書とCLAUDE.mdの値が最終確定していることを確認する。
 3. **ビルド番号(`CFBundleVersion`)は同一アプリ内で後戻りできない**。`github.run_number`を使うことで、ワークフローを再実行しない限り自然に単調増加する前提を壊さないよう注意する。
-4. **初回のCI実行は高確率でデバッグが必要**。実際のmacOSランナー・Apple資格情報を使った初回実行までは、この文書の内容は未検証の設計である旨を認識しておく。
+4. **初回のCI実行は高確率でデバッグが必要**（実際に9回失敗させてから初成功した）。以下5〜10は、その過程で実際に踏んだ不具合とその対処。新規セットアップ時に一つずつ再現するとは限らないが、同種の署名エラーが出た場合はまずここを疑う。
 5. **`agvtool`系アクション（`increment_version_number`/`increment_build_number`）・`build_app`には必ず`xcodeproj:`/`project:`でパスを明示する。** 実際に初回CI実行で`increment_version_number`が「カレントディレクトリに.xcodeprojが無い」エラーで失敗した（`ios-app/fastlane/Fastfile`のカレントディレクトリは`ios-app/`だが、Xcodeプロジェクトの実体は`ios-app/ios/App/App.xcodeproj`にあり一致しないため）。`ios-app/fastlane/Fastfile`の`XCODEPROJ_PATH`定数を参照。
 6. **`npx cap add ios`直後の`App.xcodeproj`は`CODE_SIGN_STYLE=Automatic`だが`DEVELOPMENT_TEAM`が空**なので、誰もApple IDでサインインしていないCIランナーでは署名対象チームが決まらず`build_app`が「Signing for "App" requires a development team」で失敗する。`release`レーンで`update_code_signing_settings(team_id: ENV["ASC_TEAM_ID"])`を実行してこれを解消する。実際に初回CI実行で踏んだ不具合。
 7. **`build_app`（gym）は`app_store_connect_api_key`で取得した資格情報を、xcodebuildのクラウド署名（`-allowProvisioningUpdates`）へ自動転送しない。** `xcargs: "-allowProvisioningUpdates"`だけを渡しても、xcodebuildは資格情報を持たないためローカルXcodeアカウントでの署名にフォールバックしようとし、「No Accounts: Add a new account in Accounts settings.」「No profiles for '...' were found」で失敗する（fastlane公式でも「あったら便利だが未実装」として認識されている既知の制約。[GitHub Discussion #19973](https://github.com/fastlane/fastlane/discussions/19973)）。`.p8`の内容を一時ファイルに書き出し、`-authenticationKeyPath`/`-authenticationKeyID`/`-authenticationKeyIssuerID`をxcargsで明示的に渡す必要がある（`ios-app/fastlane/Fastfile`参照）。実際に初回CI実行で踏んだ不具合。
 8. **`CODE_SIGN_STYLE = Automatic`の下で`CODE_SIGN_IDENTITY`を手動指定してはいけない（併用不可）。** `npx cap add ios`直後の`App.xcodeproj`は`CODE_SIGN_IDENTITY`が両Configuration（Debug/Release）とも旧形式の`"iPhone Developer"`（＝Development証明書）に固定されている。この状態のままだとarchive時にも配布用ではなく開発用のプロビジョニングプロファイルが要求され、「Communication with Apple failed: Your team has no devices from which to generate a provisioning profile」で失敗する。**これを`update_code_signing_settings(code_sign_identity: "Apple Distribution")`で上書きしようとするのは誤り**で、今度はXcodeが「App is automatically signed for development, but a conflicting code signing identity Apple Distribution has been manually specified」と拒否する（Automatic署名下でのidentity手動指定そのものが矛盾と見なされるため）。正しい修正は、`ios-app/ios/App/App.xcodeproj/project.pbxproj`から`CODE_SIGN_IDENTITY = "iPhone Developer";`の行をDebug/Release両方から**削除**すること。identityを一切指定しなければ、Automatic署名がビルドアクション（archiveなら配布用）に応じて適切な証明書種別を自分で判断してくれる。実際に初回CI実行で段階的に踏んだ不具合（`fix_fastlane_release_cert_identity`で一度誤った方向に進み、後続コミットで是正した）。
 9. **`update_code_signing_settings`は呼び出すたびに`CODE_SIGN_STYLE`を無条件で書き込み、`use_automatic_signing:`のデフォルトは`false`。** 「渡さなかったパラメータは前回の値を保持する」という選択的な挙動をするのは`team_id`/`code_sign_identity`など個別項目だけで、`CODE_SIGN_STYLE`自体は常に`use_automatic_signing`の値で上書きされる。このアクションを複数回呼ぶ設計にする場合は、2回目以降も`use_automatic_signing: true`を省略しないこと（省略すると直前の呼び出しでAutomaticにした設定がManualに戻り、「"App" requires a provisioning profile. Select a provisioning profile in the Signing & Capabilities editor.」で即失敗する）。
+10. **【最終的な決め手】Apple Developerアカウントにデバイスが1台も登録されていないと、配布用（App Store export）のarchiveであっても必ず失敗する。** `xcodebuild archive`は、最終的にDistribution用にエクスポートする場合でも、archiveの過程で開発用（Development）のプロビジョニングプロファイルも要求する。開発用プロファイルはApple仕様上デバイス登録が必須のため、「Communication with Apple failed: Your team has no devices from which to generate a provisioning profile」「No profiles for '...' were found: ... iOS App Development provisioning profiles」で失敗し続ける。[Certificates, Identifiers & Profiles → Devices](https://developer.apple.com/account/resources/devices/list)で実機のUDIDを最低1台登録すれば解消する。**このプロジェクトで最終的に成功した決め手はこれであり、APIキーをAdmin権限にしたこと単体では解消しなかった**（Admin権限への切り替え直後、デバイス未登録の間は同一エラーが再現している）。エラーメッセージ自体が「Connect a device to use or manually add device IDs」と対処法を教えてくれているので、同じ文言のエラーが出たら真っ先にこれを疑う。
 
 ## 古いMacでのローカルデバッグの限界
 
