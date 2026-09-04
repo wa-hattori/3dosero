@@ -63,25 +63,18 @@ platform :ios do
       team_id: ENV.fetch("ASC_TEAM_ID"),
     )
 
-    # プロジェクト生成時点の`CODE_SIGN_IDENTITY`が両Configurationとも
-    # 旧形式の"iPhone Developer"(=Development証明書)に固定されているため、
-    # archive時にも配布用ではなく開発用プロビジョニングプロファイルが要求され、
-    # 「Your team has no devices from which to generate a provisioning
-    # profile」で失敗する。Release configurationだけ"Apple Distribution"に
-    # 上書きする(実際にCIで踏んだ不具合)。
-    #
-    # `use_automatic_signing:`はデフォルトが`false`で、かつこのアクションは
-    # 呼び出すたびに`CODE_SIGN_STYLE`を無条件で書き込む(渡さなかった項目だけ
-    # 前回の値を保持、というわけではない)。省略すると直前の呼び出しで
-    # Automaticにしたはずの設定がManualに上書きされ、「App requires a
-    # provisioning profile」で即失敗する(実際にCIで踏んだ不具合。ネットワーク
-    # 通信すら発生しないのが手がかりだった)。
-    update_code_signing_settings(
-      use_automatic_signing: true,
-      path: XCODEPROJ_PATH,
-      build_configurations: ["Release"],
-      code_sign_identity: "Apple Distribution",
-    )
+    # 過去にxcargsやupdate_code_signing_settingsでCODE_SIGN_IDENTITYを
+    # "Apple Distribution"に明示指定しようと試みたが、CODE_SIGN_STYLE=Automatic
+    # の下でCODE_SIGN_IDENTITYを手動指定すると、Xcodeが「App is automatically
+    # signed for development, but a conflicting code signing identity
+    # Apple Distribution has been manually specified」とエラーにする(Automatic
+    # 署名とCODE_SIGN_IDENTITYの手動指定はそもそも併用できない)。
+    # 正しい修正は、`npx cap add ios`が生成した直後のプロジェクトに残っていた
+    # 旧形式の`CODE_SIGN_IDENTITY = "iPhone Developer"`のハードコードを
+    # `ios-app/ios/App/App.xcodeproj/project.pbxproj`から直接削除することだった
+    # (Debug/Release両方)。identityを一切指定しなければ、Automatic署名が
+    # ビルドアクション(archiveなら配布用)に応じて適切な証明書種別を自分で
+    # 判断してくれる。実際に初回CI実行で踏んだ不具合。
 
     # gym(build_app)はapp_store_connect_api_keyで取得した資格情報を
     # xcodebuildのクラウド署名(-allowProvisioningUpdates)へ自動転送しない
