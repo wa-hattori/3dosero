@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>3dosero — 立体オセロ</title>
   <style>
     html, body {
@@ -37,8 +37,10 @@
 
     .status-panel {
       position: absolute;
-      top: 16px;
-      left: 16px;
+      /* iPhoneのノッチ/Dynamic Island・ステータスバーと重ならないよう、
+         セーフエリア分だけ余分にオフセットする(viewport-fit=coverと対）。 */
+      top: calc(16px + env(safe-area-inset-top));
+      left: calc(16px + env(safe-area-inset-left));
       padding: 8px 16px;
       border-radius: 8px;
       background: rgba(0, 0, 0, 0.5);
@@ -62,7 +64,8 @@
 
     .layer-control {
       position: absolute;
-      bottom: 24px;
+      /* iPhoneのホームインジケータと重ならないようセーフエリア分オフセットする。 */
+      bottom: calc(24px + env(safe-area-inset-bottom));
       left: 50%;
       transform: translateX(-50%);
       display: flex;
@@ -234,8 +237,8 @@
 
     .mute-toggle {
       position: absolute;
-      top: 16px;
-      right: 16px;
+      top: calc(16px + env(safe-area-inset-top));
+      right: calc(16px + env(safe-area-inset-right));
       z-index: 10;
       width: 40px;
       height: 40px;
@@ -254,8 +257,8 @@
 
     .title-button {
       position: absolute;
-      top: 64px;
-      right: 16px;
+      top: calc(64px + env(safe-area-inset-top));
+      right: calc(16px + env(safe-area-inset-right));
       z-index: 10;
       padding: 8px 14px;
       border-radius: 8px;
@@ -273,8 +276,8 @@
 
     .version-badge {
       position: absolute;
-      bottom: 16px;
-      right: 16px;
+      bottom: calc(16px + env(safe-area-inset-bottom));
+      right: calc(16px + env(safe-area-inset-right));
       padding: 2px 8px;
       opacity: 0.5;
       font-size: 0.75rem;
