@@ -194,7 +194,13 @@ end
 - アプリアイコン: Xcode 14以降のアセットカタログは1024×1024（アルファチャンネルなし）のPNG1枚だけで全サイズを自動生成するため、複数サイズを個別に用意する必要はない。`ios-app/ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png`を差し替えるだけでよい。
   - デザインは「積み重なった正方形の盤面」というコンセプトを表す、3層のフラットなアイソメトリック板＋石2個（黒・白）。ソース（SVG）は`ios-app/icon-source.svg`、生成スクリプトは`ios-app/scripts/generate-icon.py`（ImageMagick/`convert`が必要。デザインを調整したら再実行して差し替える）。
   - App Store提出用アイコンはアルファチャンネルを持てない（Appleが拒否する）ため、生成スクリプトは`-alpha remove -alpha off`で必ず不透明化する。
-- プライバシーポリシー: GitHub Pagesに簡単な1ページ（`privacy.html`、リポジトリルート直下、`deploy.yml`のステージ対象に追加）を用意し、そのURLをApp Store Connectのプライバシーポリシー欄に登録する。内容は「個人情報を収集しない」旨を明記する程度の最小限のものとする（本アプリはサーバー通信を行わないため）。
+- プライバシーポリシー: GitHub Pagesに1ページ（`privacy.html`、リポジトリルート直下、`deploy.yml`のステージ対象に追加）を用意し、そのURLをApp Store Connectのプライバシーポリシー欄に登録する。オンライン対戦（Firebase）・広告（AdMob）を実装した時点で、それぞれが送受信するデータについて正直に記載する内容へ更新済み（[online-multiplayer](../online-multiplayer/SKILL.md)・[ios-ads](../ios-ads/SKILL.md)参照）。機能追加でサーバー通信の内容が変わった場合は、その都度このページも見直すこと（更新を怠ると実態と乖離する）。
+
+## 輸出コンプライアンス（暗号化）の申告
+
+App Store Connectはビルドごとに「アプリの暗号化書類」（暗号化アルゴリズムに関する質問）への回答を求める。本アプリが使う暗号化はFirebase/AdMob SDK経由の標準的なHTTPS通信のみで、**独自（proprietary）の暗号化アルゴリズムは実装していない**ため、輸出コンプライアンス対象外（exempt）に該当する。
+
+`ios-app/ios/App/App/Info.plist`に`ITSAppUsesNonExemptEncryption`を`false`で宣言済み。これにより新規ビルドでは毎回の手動回答が不要になる（[Appleの解説](https://developer.apple.com/help/app-store-connect/manage-app-information/determine-and-upload-app-encryption-documentation)参照）。この宣言を追加する前にアップロードされたビルドについては、App Store Connect上の「Provide Export Compliance Information」から個別に回答する必要がある（回答内容: 標準的なHTTPS暗号化のみを使用しており、独自の暗号化アルゴリズムは実装していない、という趣旨で進める）。
 
 ## App Store Connect 掲載情報
 
