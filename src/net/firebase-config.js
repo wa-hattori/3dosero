@@ -7,18 +7,16 @@
  * for Firebase"）。そのためこのファイルは`.gitignore`せず、実際の値をそのまま
  * コミットしてよい。
  *
- * 現時点ではFirebaseプロジェクトが未作成のためプレースホルダー値になっている。
- * Firebaseコンソール（https://console.firebase.google.com/）でプロジェクトを作成し、
- * Web用アプリを登録すると表示される設定値でこのオブジェクトを置き換える
- * （[online-multiplayer](../../.claude/skills/online-multiplayer/SKILL.md)参照）。
+ * Firebaseプロジェクト「3dosero」（プロジェクトID: dosero）のWebアプリ「3dosero-web」の
+ * 設定値（[online-multiplayer](../../.claude/skills/online-multiplayer/SKILL.md)参照）。
  */
 export const FIREBASE_CONFIG = {
-  apiKey: 'REPLACE_ME',
-  authDomain: 'REPLACE_ME.firebaseapp.com',
-  projectId: 'REPLACE_ME',
-  storageBucket: 'REPLACE_ME.firebasestorage.app',
-  messagingSenderId: 'REPLACE_ME',
-  appId: 'REPLACE_ME',
+  apiKey: 'AIzaSyBS0YwhmQ0lLa0zh5tJlmzqzrR8zLUx6Yg',
+  authDomain: 'dosero.firebaseapp.com',
+  projectId: 'dosero',
+  storageBucket: 'dosero.firebasestorage.app',
+  messagingSenderId: '135203429895',
+  appId: '1:135203429895:web:ab5b3a2aab007efc0e94a2',
 };
 
 /**
