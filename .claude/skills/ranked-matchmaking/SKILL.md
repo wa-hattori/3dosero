@@ -130,9 +130,13 @@ function settleRankedResult(roomId, myColor, myResult):
     update players/{myUid}: { score: myScore + delta, gamesPlayed: increment(1), updatedAt }
     update rooms/{roomId}: { settled.{myColor}: true }
   commit batch
+
+  return { beforeScore: myScore, afterScore: myScore + delta, delta }   # 精算しなかった場合はnull
 ```
 
 `myResult`は`winner`フィールドから導出する（自分の色と一致すれば1、相手の色なら0、`winner == null`〈引き分け〉なら0.5）。
+
+戻り値（`null`でない場合）は`src/ui/score-change-screen.js`の`createScoreChangeScreen`に渡し、end-screenの「タイトルに戻る」の後続画面としてスコア変動を可視化する（`before → after`のスコア・変動量・階級が変わった場合の昇格/降格表示）。ルームコード制の対局・既に精算済みの場合は`null`が返るため、その場合はend-screenの「タイトルに戻る」を従来通り即座にページ再読み込みとして扱う。
 
 ## Firestoreセキュリティルール（追加分）
 

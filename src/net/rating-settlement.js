@@ -26,7 +26,9 @@ const colorKey = (color) => (color === BLACK ? 'black' : 'white');
  * @param {string} params.roomId - ルームコード
  * @param {number} params.myColor - 自分の色（`BLACK`/`WHITE`）
  * @param {number} params.myResult - `rating.js`の`MATCH_RESULT`のいずれか
- * @returns {Promise<void>}
+ * @returns {Promise<{ beforeScore: number, afterScore: number, delta: number } | null>}
+ *   実際に精算した場合のみスコア変動を返す（ルームコード制の対局・既に精算済みの
+ *   場合は`null`。スコア変動画面〈score-change-screen.js〉の表示要否の判定に使う）
  */
 export const settleRankedResult = async ({ roomId, myColor, myResult }) => {
   const db = getFirestoreInstance();
@@ -34,15 +36,16 @@ export const settleRankedResult = async ({ roomId, myColor, myResult }) => {
   const roomRef = doc(db, ROOMS_COLLECTION, roomId);
 
   const roomSnapshot = await getDoc(roomRef);
-  if (!roomSnapshot.exists()) return;
+  if (!roomSnapshot.exists()) return null;
   const room = roomSnapshot.data();
-  if (!room.ranked) return;
+  if (!room.ranked) return null;
 
   const myKey = colorKey(myColor);
-  if (room.settled?.[myKey]) return;
+  if (room.settled?.[myKey]) return null;
 
   const opponentKey = myKey === 'black' ? 'white' : 'black';
-  const delta = calculateEloDelta(room.ratingSnapshot[myKey], room.ratingSnapshot[opponentKey], myResult);
+  const beforeScore = room.ratingSnapshot[myKey];
+  const delta = calculateEloDelta(beforeScore, room.ratingSnapshot[opponentKey], myResult);
 
   const batch = writeBatch(db);
   batch.update(doc(db, PLAYERS_COLLECTION, uid), {
@@ -54,4 +57,6 @@ export const settleRankedResult = async ({ roomId, myColor, myResult }) => {
   });
   batch.update(roomRef, { [`settled.${myKey}`]: true });
   await batch.commit();
+
+  return { beforeScore, afterScore: beforeScore + delta, delta };
 };

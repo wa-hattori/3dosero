@@ -18,6 +18,7 @@ import { createStatusPanel } from './ui/status-panel.js';
 import { createLayerControl } from './ui/layer-control.js';
 import { createStartScreen } from './ui/start-screen.js';
 import { createEndScreen } from './ui/end-screen.js';
+import { createScoreChangeScreen } from './ui/score-change-screen.js';
 import { createHeroScene } from './render/hero-scene.js';
 import { createStarfield } from './render/starfield-view.js';
 import { createBgmPlayer } from './audio/bgm-player.js';
@@ -146,6 +147,11 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
   // 自分の精算の書き込み（settled.<自分の色>の更新）自体でも再度発火するため、
   // フラグで二重の精算試行（実害はないが無駄な読み取りが発生する）を防ぐ。
   let rankedResultSettled = false;
+  // 終了画面（end-screen/score-change-screen）も、精算完了を待ってから表示する
+  // レート戦では上記とは別のタイミングで確定するため、独立したフラグで
+  // 「既に表示したか」を管理する（相手側の精算書き込みによる再発火でも
+  // 画面を重複生成しないようにするため）。
+  let resultScreensShown = false;
 
   if (battleMode === 'online') {
     // オンライン対戦では盤面の実体をFirestore側に置き、この購読が状態更新の
@@ -161,9 +167,27 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
 
       if (isOver) {
         notifyGameEnded();
-        createEndScreen(uiOverlay, { winner, counts: countStones(board) });
 
-        if (!rankedResultSettled) {
+        const showResultScreens = (settlement) => {
+          if (resultScreensShown) return;
+          resultScreensShown = true;
+          const endScreen = createEndScreen(uiOverlay, {
+            winner,
+            counts: countStones(board),
+            // レート戦でスコアが精算できた場合のみ、「タイトルに戻る」の代わりに
+            // スコア変動画面を挟む（未精算・非レート戦ではこれまで通り即座に戻る）。
+            onContinue: settlement
+              ? () => {
+                  endScreen.dispose();
+                  createScoreChangeScreen(uiOverlay, settlement);
+                }
+              : undefined,
+          });
+        };
+
+        if (!room.ranked) {
+          showResultScreens(null);
+        } else if (!rankedResultSettled) {
           rankedResultSettled = true;
           const myResult =
             winner === null
@@ -171,11 +195,12 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
               : winner === myOnlineColor
                 ? MATCH_RESULT.WIN
                 : MATCH_RESULT.LOSS;
-          settleRankedResult({ roomId: online.roomId, myColor: myOnlineColor, myResult }).catch(
-            (error) => {
+          settleRankedResult({ roomId: online.roomId, myColor: myOnlineColor, myResult })
+            .then((settlement) => showResultScreens(settlement))
+            .catch((error) => {
               console.error('レート戦の結果精算に失敗しました', error);
-            },
-          );
+              showResultScreens(null);
+            });
         }
       }
     });
