@@ -4,7 +4,7 @@ import { getNextTurn, getWinner, countStones } from './logic/game-state.js';
 import { chooseRandomMove, RANDOM_CPU_LEVEL } from './logic/cpu.js';
 import { loadModelSession } from './ai/model-loader.js';
 import { chooseGanMove } from './ai/gan-cpu.js';
-import { submitMove, subscribeToRoom } from './net/room-sync.js';
+import { submitMove, subscribeToRoom, forfeitRoom } from './net/room-sync.js';
 import { notifyGameEnded } from './ads/interstitial-ads.js';
 import { createSceneManager } from './render/scene-manager.js';
 import { createCameraControls } from './render/camera-controls.js';
@@ -93,7 +93,15 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
   const stoneView = createStoneView(sceneManager.scene, boardSize);
   const highlightView = createHighlightView(sceneManager.scene, boardSize);
   const statusPanel = createStatusPanel(uiOverlay);
-  createTitleButton(uiOverlay);
+  createTitleButton(uiOverlay, {
+    // オンライン対戦中に「タイトルに戻る」で離脱した場合、離脱した側を無条件で
+    // 敗北・相手を無条件で勝利として通知する（相手がずっと待機状態のままに
+    // ならないようにするため）。既に対局が終わっている場合は何もしない。
+    onBeforeLeave: async () => {
+      if (battleMode !== 'online' || isOver) return;
+      await forfeitRoom({ roomId: online.roomId, myColor: myOnlineColor });
+    },
+  });
   const battleStarfield = createStarfield(sceneManager.scene, {
     mode: 'warp',
     color: BATTLE_STARFIELD_COLORS[battleMode] ?? BATTLE_STARFIELD_COLORS.local,
