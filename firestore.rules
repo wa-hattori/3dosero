@@ -34,14 +34,18 @@ service cloud.firestore {
             && request.resource.data.status == 'in_progress')
         );
 
-      // 更新は「参加（白番の空席を自分で埋める）」または「既存参加者が自分の手番で
-      // 着手する」のいずれかである場合のみ許可する。
-      // 【注意】この2ケースは前提条件が逆(参加は「まだ参加者でない」人が行う操作、
-      // 着手は「既に参加者である」人が行う操作)なので、"参加者であること"を両ケース
-      // 共通の前提条件として先にANDで課してはいけない(それをすると参加が常に拒否
-      // される。実機の統合テストで発見した不具合)。ケースごとに個別の条件式にする。
+      // 更新は「参加（白番の空席を自分で埋める）」「既存参加者が自分の手番で着手する」
+      // 「既存参加者が対局を放棄する（相手の手番中でも可）」のいずれかである場合のみ
+      // 許可する。
+      // 【注意】これらのケースは前提条件が互いに異なる(参加は「まだ参加者でない」人が
+      // 行う操作、着手は「既に参加者かつ自分の手番」の人が行う操作、放棄は「既に参加者
+      // だが手番は問わない」人が行う操作)ので、共通の前提条件として先にANDで課しては
+      // いけない(それをすると一部のケースが常に拒否される。実機の統合テストで発見した
+      // 不具合)。ケースごとに個別の条件式にする。
       allow update: if request.auth != null
-        && (isJoining(resource.data, request.resource.data) || isMyTurn(resource.data));
+        && (isJoining(resource.data, request.resource.data)
+          || isMyTurn(resource.data)
+          || isForfeiting(resource.data, request.resource.data));
 
       function isJoining(before, after) {
         return before.players.white == null && after.players.white == request.auth.uid;
@@ -52,6 +56,17 @@ service cloud.firestore {
         // (ルール言語からはJSの定数をimportできないため、ここでは数値リテラルで比較する)。
         return (room.currentTurn == 1 && room.players.black == request.auth.uid)
           || (room.currentTurn == 2 && room.players.white == request.auth.uid);
+      }
+
+      // 「タイトルに戻る」等で対局を放棄する場合。相手の手番中でも離脱できる必要が
+      // あるため、isMyTurnとは独立したケースにする。放棄した本人が"自分を勝者にする"
+      // ような改ざんができないよう、勝者は必ず自分と逆の色になっていることを検証する。
+      function isForfeiting(before, after) {
+        let amBlack = before.players.black == request.auth.uid;
+        let amWhite = before.players.white == request.auth.uid;
+        return before.status == 'in_progress'
+          && after.status == 'finished'
+          && ((amBlack && after.winner == 2) || (amWhite && after.winner == 1));
       }
     }
 

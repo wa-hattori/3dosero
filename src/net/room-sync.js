@@ -21,7 +21,7 @@ import {
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import { BLACK, WHITE, createInitialBoard } from '../logic/board.js';
+import { BLACK, WHITE, createInitialBoard, oppositeColor } from '../logic/board.js';
 import { getNextTurn, getWinner } from '../logic/game-state.js';
 import { isValidMove, applyMove } from '../logic/flip-rule.js';
 import { deserializeBoard, serializeBoard } from './board-serialization.js';
@@ -158,3 +158,21 @@ export const subscribeToRoom = (roomId, onChange) =>
     if (!snapshot.exists()) return;
     onChange(toRoomState(roomId, snapshot.data()));
   });
+
+/**
+ * 対局を放棄する（「タイトルに戻る」等で進行中の対局から離脱する）。放棄した側を
+ * 無条件で敗北、相手を無条件で勝利として即座に終局させる。手番に関わらずいつでも
+ * 呼べる（`submitMove`とは異なり、相手の手番中の離脱にも対応する必要があるため）。
+ * 盤面自体はそれ以上変更せず、離脱時点の状態のまま凍結する。
+ * @param {object} params
+ * @param {string} params.roomId - ルームコード
+ * @param {number} params.myColor - 離脱する自分の色（この色が敗北になる）
+ * @returns {Promise<void>}
+ */
+export const forfeitRoom = async ({ roomId, myColor }) => {
+  await updateDoc(roomRef(roomId), {
+    status: 'finished',
+    winner: oppositeColor(myColor),
+    updatedAt: serverTimestamp(),
+  });
+};
