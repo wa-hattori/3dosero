@@ -16,12 +16,23 @@ service cloud.firestore {
       // 観戦機能を将来追加しやすいよう、読み取りは誰でも許可する。
       allow read: if true;
 
-      // 部屋の作成は、作成者が黒番として自分自身を登録し、白番は空席、
-      // ステータスが「待機中」である場合のみ許可する。
+      // 部屋の作成には2つの形がある(いずれか一方を満たせばよい)。
+      // 1. ルームコード制: 作成者が黒番として自分自身を登録し、白番は空席、
+      //    ステータスが「待機中」。
+      // 2. ランダムマッチング: 待機中の相手を見つけた側が、その場で相手を黒番・
+      //    自分を白番として両者を埋めた「進行中」の部屋を直接作る
+      //    （`src/net/matchmaking.js`の`tryClaimCandidate`参照）。ルームコード制の
+      //    形と前提が異なる(白番が空席ではなく、ステータスも進行中)ため、
+      //    同じ条件式では両立できず別ケースとして扱う必要がある。
       allow create: if request.auth != null
-        && request.resource.data.players.black == request.auth.uid
-        && request.resource.data.players.white == null
-        && request.resource.data.status == 'waiting';
+        && (
+          (request.resource.data.players.black == request.auth.uid
+            && request.resource.data.players.white == null
+            && request.resource.data.status == 'waiting')
+          || (request.resource.data.players.white == request.auth.uid
+            && request.resource.data.players.black != null
+            && request.resource.data.status == 'in_progress')
+        );
 
       // 更新は「参加（白番の空席を自分で埋める）」または「既存参加者が自分の手番で
       // 着手する」のいずれかである場合のみ許可する。
