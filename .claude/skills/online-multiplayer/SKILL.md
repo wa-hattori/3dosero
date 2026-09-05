@@ -72,6 +72,8 @@ function joinRoom(roomId, myUid):
 
 Cloud Functions等のサーバー処理を使わず、クライアントの`runTransaction`だけで「2人が同時に同じ相手を取り合う」競合を避ける。
 
+**【実際に踏んだ不具合】`boardSize`・`status`の等価条件2つと`createdAt`の並べ替えを組み合わせたクエリは、Firestore側に複合インデックスを事前作成しないと`FirebaseError: The query requires an index`で失敗する。** セキュリティルールのレビューでは気づけない種類の不具合（インデックスの有無はルールとは完全に別の設定であり、実際にこのクエリを本番のFirestoreに対して実行するまで顕在化しない）で、実機ではなく結合テストで発見した。`firestore.indexes.json`（リポジトリルート）に複合インデックスを定義し、`firebase.json`の`firestore.indexes`から参照させることで、`firebase deploy --only firestore:indexes`（または`firestore:rules,firestore:indexes`のように併記）で反映できるようにした。**新しいクエリ（複数の`where`＋`orderBy`の組み合わせ）を追加する際は、複合インデックスが必要にならないか毎回疑うこと。**
+
 ```
 function requestRandomMatch(boardSize, myUid):
   myTicket = create matchmakingQueue/{myTicketId} = {
@@ -135,7 +137,7 @@ function submitMove(roomId, myColor, x, y, z, currentBoard, boardSize):
   - **教訓**: `allow create`/`allow update`とも、「同じフィールドに複数の書き込みパターンがあり、それぞれ前提条件が異なる」場合は、共通の前提条件でANDにまとめようとせず、パターンごとに完結した条件式を`OR`で結ぶこと。今回2回とも同じ種類のミス（本来は互いに排他的な複数ケースを、共通の前提条件で誤って束ねてしまう）を犯しており、再発しやすい罠だと考えられる。
 - `matchmakingQueue/{ticketId}`: 作成は`request.auth.uid == request.resource.data.uid`の場合のみ。更新（マッチ成立）は誰でも行える必要がある（相手のチケットを自分がマッチさせるトランザクションが発生するため）が、`status`を`'waiting'`から`'matched'`にする一方向の遷移のみ許可し、それ以外のフィールド改ざんは拒否する。
 
-実際のルールファイルは`firestore.rules`（リポジトリルート、`firebase deploy --only firestore:rules`で反映）に実装する。**ルールのFirebaseへの反映はユーザー側の手動作業**（Firebase CLIのセットアップ、プロジェクトへのログインが必要なため）。**ルールを変更した際は、`firebase deploy --only firestore:rules`を再度実行しない限りFirebase側には反映されない**ことに注意する（コード変更をコミットしただけでは有効にならない）。
+実際のルールファイルは`firestore.rules`（リポジトリルート）に、複合インデックスは`firestore.indexes.json`（リポジトリルート、`firebase.json`の`firestore.indexes`から参照）に実装する。**Firebaseへの反映はユーザー側の手動作業**（Firebase CLIのセットアップ、プロジェクトへのログインが必要なため）で、`firebase deploy --only firestore:rules,firestore:indexes --project <プロジェクトID>`で両方まとめて反映できる。**ルール・インデックスを変更した際は、このコマンドを再度実行しない限りFirebase側には反映されない**ことに注意する（コード変更をコミットしただけでは有効にならない）。
 
 ## モジュール構成（`src/net/`）
 
