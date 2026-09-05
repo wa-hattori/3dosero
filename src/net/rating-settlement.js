@@ -7,15 +7,12 @@
  */
 
 import { doc, getDoc, increment, writeBatch } from 'firebase/firestore';
-import { BLACK } from '../logic/board.js';
+import { colorKey } from '../logic/board.js';
 import { calculateEloDelta } from './rating.js';
 import { ensureSignedIn, getFirestoreInstance } from './firebase-init.js';
 
 const ROOMS_COLLECTION = 'rooms';
 const PLAYERS_COLLECTION = 'players';
-
-/** 部屋ドキュメントの`ratingSnapshot`/`settled`のキー名に変換する。 */
-const colorKey = (color) => (color === BLACK ? 'black' : 'white');
 
 /**
  * 対局終了を検知したクライアントが、自分の分のスコア変動だけを精算する。

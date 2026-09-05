@@ -11,6 +11,7 @@ import {
   createEmptyBoard,
   createInitialBoard,
   oppositeColor,
+  colorKey,
 } from './board.js';
 
 test('BOARD_SIZE is 8', () => {
@@ -28,6 +29,14 @@ test('oppositeColor returns WHITE for BLACK', () => {
 
 test('oppositeColor returns BLACK for WHITE', () => {
   assert.equal(oppositeColor(WHITE), BLACK);
+});
+
+test('colorKey returns "black" for BLACK', () => {
+  assert.equal(colorKey(BLACK), 'black');
+});
+
+test('colorKey returns "white" for WHITE', () => {
+  assert.equal(colorKey(WHITE), 'white');
 });
 
 test('indexOf maps the origin to index 0', () => {
