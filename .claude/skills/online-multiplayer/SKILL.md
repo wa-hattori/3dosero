@@ -129,10 +129,11 @@ function submitMove(roomId, myColor, x, y, z, currentBoard, boardSize):
 ## Firestoreセキュリティルール（`firestore.rules`）
 
 方針:
-- `rooms/{roomId}`: 誰でも読める（観戦の将来拡張を妨げないため）。書き込みは`request.auth.uid`が`players.black`または`players.white`と一致し、かつ`currentTurn`が自分の色である場合のみ許可する。
+- `rooms/{roomId}`: 誰でも読める（観戦の将来拡張を妨げないため）。更新は「参加（白番の空席を自分のuidで埋める）」または「既存参加者が自分の手番で着手する」のいずれかに該当する場合のみ許可する。
+  - **この2ケースは前提条件が逆になる点に注意する**: 参加は「まだこの部屋の参加者ではない」人が行う操作、着手は「既にこの部屋の参加者である」人が行う操作。「部屋の参加者(黒番または白番)であること」を両ケース共通のANDの前提条件として先に課してはいけない。それをすると参加操作自体が常に拒否される（実機の統合テストで実際に発見した不具合。参加者を求める前提条件を満たせるのは参加後であって参加前ではないため、循環的に成立し得ない）。ケースごとに個別の条件式として`OR`で結ぶこと（`firestore.rules`の`isJoining`/`isMyTurn`参照）。
 - `matchmakingQueue/{ticketId}`: 作成は`request.auth.uid == request.resource.data.uid`の場合のみ。更新（マッチ成立）は誰でも行える必要がある（相手のチケットを自分がマッチさせるトランザクションが発生するため）が、`status`を`'waiting'`から`'matched'`にする一方向の遷移のみ許可し、それ以外のフィールド改ざんは拒否する。
 
-実際のルールファイルは`firestore.rules`（リポジトリルート、`firebase deploy --only firestore:rules`で反映）に実装する。**ルールのFirebaseへの反映はユーザー側の手動作業**（Firebase CLIのセットアップ、プロジェクトへのログインが必要なため）。
+実際のルールファイルは`firestore.rules`（リポジトリルート、`firebase deploy --only firestore:rules`で反映）に実装する。**ルールのFirebaseへの反映はユーザー側の手動作業**（Firebase CLIのセットアップ、プロジェクトへのログインが必要なため）。**ルールを変更した際は、`firebase deploy --only firestore:rules`を再度実行しない限りFirebase側には反映されない**ことに注意する（コード変更をコミットしただけでは有効にならない）。
 
 ## モジュール構成（`src/net/`）
 

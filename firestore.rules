@@ -23,24 +23,24 @@ service cloud.firestore {
         && request.resource.data.players.white == null
         && request.resource.data.status == 'waiting';
 
-      // 更新は、その部屋の参加者(黒番または白番)本人からのものであり、
-      // かつ「参加（白番の空席を自分で埋める)」または「自分の手番での着手」の
-      // いずれかである場合のみ許可する。
+      // 更新は「参加（白番の空席を自分で埋める）」または「既存参加者が自分の手番で
+      // 着手する」のいずれかである場合のみ許可する。
+      // 【注意】この2ケースは前提条件が逆(参加は「まだ参加者でない」人が行う操作、
+      // 着手は「既に参加者である」人が行う操作)なので、"参加者であること"を両ケース
+      // 共通の前提条件として先にANDで課してはいけない(それをすると参加が常に拒否
+      // される。実機の統合テストで発見した不具合)。ケースごとに個別の条件式にする。
       allow update: if request.auth != null
-        && isRoomParticipant(resource.data)
-        && isJoiningOrMyTurn(resource.data, request.resource.data);
+        && (isJoining(resource.data, request.resource.data) || isMyTurn(resource.data));
 
-      function isRoomParticipant(room) {
-        return request.auth.uid == room.players.black || request.auth.uid == room.players.white;
+      function isJoining(before, after) {
+        return before.players.white == null && after.players.white == request.auth.uid;
       }
 
-      function isJoiningOrMyTurn(before, after) {
+      function isMyTurn(room) {
         // currentTurnはsrc/logic/board.jsのBLACK(1)/WHITE(2)をそのまま保存している
         // (ルール言語からはJSの定数をimportできないため、ここでは数値リテラルで比較する)。
-        let isJoining = before.players.white == null && after.players.white == request.auth.uid;
-        let isMyTurn = (before.currentTurn == 1 && before.players.black == request.auth.uid)
-          || (before.currentTurn == 2 && before.players.white == request.auth.uid);
-        return isJoining || isMyTurn;
+        return (room.currentTurn == 1 && room.players.black == request.auth.uid)
+          || (room.currentTurn == 2 && room.players.white == request.auth.uid);
       }
     }
 
