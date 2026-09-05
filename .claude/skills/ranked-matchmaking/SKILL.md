@@ -25,6 +25,7 @@ description: ランダムマッチングにおけるプレイヤーネーム・E
 - 1回の更新で動ける幅は`MAX_SCORE_DELTA`（Kファクターと同じ値）に上限を設ける。
 - 同じ部屋の結果を二重に申告できないよう、部屋側に`settled.{black,white}`フラグを持たせ、スコア更新と同じ`writeBatch`で「未精算→精算済み」に一方向遷移させる。
 - **既知の抜け穴**: この「同じバッチで部屋の精算フラグも一緒に立てる」という制約は、Firestoreルールの仕組み上、**1つのドキュメント単体のルールだけでは「同じバッチ内で別ドキュメントへの書き込みも必ず伴う」ことを強制できない**（ルールはドキュメントごとに独立して評価され、同一バッチ内の他の書き込みを検知する手段がない）。そのため、意図的に部屋側の精算フラグ更新だけを省いて`players/{uid}`のスコア更新だけを繰り返し送信するクライアントを、ルールだけで完全に防ぐことはできない。この抜け穴を完全に塞ぐには、Cloud Functions等のサーバー側での結果確定が必要になるが、v1のスコープ外とする（[CLAUDE.md](../../../CLAUDE.md)の「サーバーコードを自前で書かない」方針、カジュアル対戦が主目的という位置づけを優先した判断）。将来的に本格的な不正対策が必要になった場合はここを見直す。
+- **CPU代替対戦（下記「CPU代替対戦」節）は、この抜け穴がさらに広い形で存在する**: 対人戦は少なくとも「実在する・終了済みの部屋」を必要とするが、CPU代替対戦は**その部屋自体を自分のクライアントが直接作れる**ため、実際に1分待つ・CPUと対局する、を一切せずとも精算コードを直接呼ぶだけで「CPUに勝った」という体裁の部屋を量産できてしまう。開始点となるスコア（`ratingSnapshot.black`）が自分の現在のスコアと一致することだけはルールで検証するため、Eloの計算自体は常に正直な値になる（変動幅も他と同じく`MAX_SCORE_DELTA`で頭打ち）が、「本当にCPU対戦をしたか」自体は検証できない。同じ理由（サーバーコードを書かない方針）でv1のスコープ外として受け入れる。
 
 ## Eloライクなスコア計算（純粋関数）
 
@@ -140,6 +141,44 @@ function settleRankedResult(roomId, myColor, myResult):
 
 戻り値（`null`でない場合）は`src/ui/score-change-screen.js`の`createScoreChangeScreen`に渡し、end-screenの「タイトルに戻る」の後続画面としてスコア変動を可視化する（`before → after`のスコア・変動量・階級が変わった場合の昇格/降格表示）。ルームコード制の対局・既に精算済みの場合は`null`が返るため、その場合はend-screenの「タイトルに戻る」を従来通り即座にページ再読み込みとして扱う。
 
+### CPU代替対戦（`FALLBACK_WAIT_MS`経過後）
+
+ランダムマッチングで待機中の相手が`FALLBACK_WAIT_MS`（60秒、`src/net/matchmaking-cpu-fallback.js`）以内に見つからなかった場合、自分の現在の階級に応じたCPUレベルとの対局に自動的に切り替える。マッチングチケットは取り消し、通常の`battleMode: 'cpu'`と全く同じ経路（Firestore同期なし）でローカル完結の対局を行う。
+
+```
+CPU_LEVEL_BY_TIER_ID = {
+  iron: 1, aluminum: 2, bronze: 3, silver: 4, diamond: 5, 'carbon-nanotube': 5,
+}
+NOTIONAL_RATING_BY_CPU_LEVEL = {
+  1: 1500, 2: 1600, 3: 1700, 4: 1800, 5: 2000,   # 対応する階級の下限値
+}
+```
+
+上位2階級（ダイヤ・カーボンナノチューブ）はCPUレベルの上限（5）を共有する（CPUレベルは5段階までしかないため）。
+
+対局終了時は`settleRankedCpuMatch`（`src/net/rating-settlement.js`）が、対人戦とは違う経路で結果を記録する。対人戦の部屋は必ずマッチング時点で両者が揃った状態で作られるが、CPU代替対戦は対局が終わるまでFirestoreに何も書き込まない。そこで対局終了後、**既に終了した状態のレート戦の部屋を自分で直接作り**、そのまま既存の`settleRankedResult`をそのまま呼ぶ（対人戦の精算コード・Firestoreルールをそのまま再利用するため、新しい精算ロジックを別途書かない）。自分は常に黒番、白番は`null`固定（CPUは実在のプレイヤーではないため）。`ratingSnapshot.white`にはCPUレベルに応じたみなしレーティングを使う。
+
+```
+function settleRankedCpuMatch(boardSize, board, cpuLevel, myResult):
+  myScore = 自分の現在のスコア(getMyPlayerProfileで取得)
+  cpuNotionalRating = NOTIONAL_RATING_BY_CPU_LEVEL[cpuLevel]
+  roomId = 新規生成
+
+  create rooms/{roomId}:
+    players: { black: myUid, white: null }
+    status: 'finished'
+    winner: myResultから導出(勝ち→黒, 負け→白, 引き分け→null)
+    ranked: true
+    vsCpu: true
+    cpuLevel: cpuLevel
+    ratingSnapshot: { black: myScore, white: cpuNotionalRating }
+    settled: { black: false, white: true }   # 白(CPU)側は最初から精算不要
+
+  return settleRankedResult(roomId, myColor: BLACK, myResult)
+```
+
+不正防止上の注意は上記「不正防止の方針」節参照。
+
 ## Firestoreセキュリティルール（追加分）
 
 `players/{playerId}`:
@@ -151,17 +190,20 @@ function settleRankedResult(roomId, myColor, myResult):
 
 `rooms/{roomId}`:
 - 精算フラグ更新用のケース（`isSettling`）を`allow update`に追加する。本人が参加者であり、`settled[自分の色]`が`false`→`true`への一方向遷移であることのみを許可する（他フィールドは変更不可）。
+- CPU代替対戦の記録用に、`allow create`へ第3のケースを追加する。`players.black`が本人・`players.white`が`null`・`status == 'finished'`・`ranked == true`・`settled == {black: false, white: true}`であり、かつ`ratingSnapshot.black`が`get()`で読んだ本人の現在のスコアと一致することを検証する（開始点の偽装を防ぐ。既知の限界は「不正防止の方針」節参照）。
 
 ## モジュール構成
 
 - `src/net/rating.js` — Elo計算・階級判定の純粋関数（`calculateEloDelta`/`getTier`/`getTierInfo`/`DEFAULT_SCORE`等の定数）。**Firebase依存なし**、Node標準テストで検証する。
+- `src/net/matchmaking-cpu-fallback.js` — CPU代替対戦の階級→CPUレベル・みなしレーティングの純粋関数（`getFallbackCpuLevel`/`getFallbackCpuNotionalRating`/`FALLBACK_WAIT_MS`）。**Firebase依存なし**、Node標準テストで検証する。
 - `src/net/player-profile.js` — `players/{uid}`の作成・名前更新・取得（`getMyPlayerProfile`は自分、`getPlayerProfile(uid)`は任意のプレイヤー。対戦相手表示に使う）。Firestoreへの実際の読み書き（自動テスト対象外）。
-- `src/net/rating-settlement.js` — 対局終了時のスコア精算（`writeBatch`）。精算結果（`beforeScore`/`afterScore`/`delta`）を呼び出し側に返し、スコア変動画面の描画に使う。Firestoreへの実際の読み書き（自動テスト対象外）。
+- `src/net/rating-settlement.js` — 対局終了時のスコア精算（`writeBatch`）。精算結果（`beforeScore`/`afterScore`/`delta`）を呼び出し側に返し、スコア変動画面の描画に使う。`settleRankedCpuMatch`（CPU代替対戦用）も同居する。Firestoreへの実際の読み書き（自動テスト対象外）。
 - `src/net/room-sync.js` の `getRoomSummary(roomId)` — 対戦カード画面用の軽量な部屋情報の一度読み取り。
 - `src/ui/tier-icon.js` — 階級アイコン（コイン型、CSSグラデーションのみ）のDOM要素生成。
 - `src/ui/vs-screen.js` — マッチ成立時の対戦カード画面。
 - `src/ui/score-change-screen.js` — 対局終了後のスコア変動可視化画面。
-- `src/ui/start-screen.js` — プレイヤーネーム入力ステップ・ランキング画面・プロフィール画面を追加する。
+- `src/ui/start-screen.js` — プレイヤーネーム入力ステップ・ランキング画面・プロフィール画面を追加する。`startRandomMatch`はチケット待機開始と同時に`FALLBACK_WAIT_MS`の`setTimeout`を仕掛け、マッチが先に成立すれば`clearFallbackTimeout`で解除し、成立しないまま発火したら`startCpuFallbackMatch`でCPU対戦（`battleMode: 'cpu'`、`rankedCpuMatch: { cpuLevel }`付き）に切り替える。
+- `src/main.js` — `startGame`が`rankedCpuMatch`を受け取り、CPU対戦の対局終了時（`applyMoveAndAdvance`のisOver分岐）に非`null`なら`settleRankedCpuMatch`を呼んでからend-screen/score-change-screenへ繋げる（オンライン対戦のレート戦精算と同じ`showEndScreen`ヘルパーを共有する）。
 
 ## 参照
 

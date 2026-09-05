@@ -130,7 +130,8 @@ function isStartingClock(before, after):
 - `src/ui/game-timer-view.js` — 時計の描画・ローカルでのtick・タイムアウト検知（`onTimeout`コールバック経由で`submitTimeoutLoss`を呼ぶのは呼び出し側`src/main.js`の責務）。
 - `src/audio/countdown-beep.js` — カウントダウン音の再生。
 - `src/ui/vs-screen.js` — ランダムマッチングの対戦カード画面。「対局開始」ボタンを押さなくても5秒（`AUTO_START_DELAY_MS`）で自動的に対局が始まる。
-- `src/ui/start-screen.js`の`showRulesStep` — 3Dオセロの反転ルール・このタイマー機能の説明画面（モード選択画面から「遊び方」ボタンで開く）。
+
+アプリ内にルール説明画面は置かない（直感的に理解できる範囲という判断でユーザーが不採用と決めた）。ルールの正本はあくまで[CLAUDE.md](../../../CLAUDE.md)とこのSKILL.md。
 
 ## 参照
 

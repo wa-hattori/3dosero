@@ -16,7 +16,7 @@ service cloud.firestore {
       // 観戦機能を将来追加しやすいよう、読み取りは誰でも許可する。
       allow read: if true;
 
-      // 部屋の作成には2つの形がある(いずれか一方を満たせばよい)。
+      // 部屋の作成には3つの形がある(いずれか一方を満たせばよい)。
       // 1. ルームコード制: 作成者が黒番として自分自身を登録し、白番は空席、
       //    ステータスが「待機中」。
       // 2. ランダムマッチング: 待機中の相手を見つけた側が、その場で相手を黒番・
@@ -24,6 +24,14 @@ service cloud.firestore {
       //    （`src/net/matchmaking.js`の`tryClaimCandidate`参照）。ルームコード制の
       //    形と前提が異なる(白番が空席ではなく、ステータスも進行中)ため、
       //    同じ条件式では両立できず別ケースとして扱う必要がある。
+      // 3. ランダムマッチングのCPU代替対戦（[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)の
+      //    「CPU代替対戦」参照）: 実際の対局はローカルで完結するため、対局が
+      //    終わった時点で「既に終了した状態のレート戦の部屋」を自分で直接作り、
+      //    レート戦の精算に使う（`settleRankedCpuMatch`参照）。白番は実在しない
+      //    (常に空席)。Eloの計算開始点(`ratingSnapshot.black`)が自分の現在の
+      //    スコアと一致することをここで検証し、有利な開始点を偽って報告する
+      //    ことを防ぐ(1回の精算あたりの変動幅は`isReferencingUnsettledRankedWin`
+      //    側で別途±32に絞られる。詳細・既知の限界はSKILL.md参照)。
       allow create: if request.auth != null
         && (
           (request.resource.data.players.black == request.auth.uid
@@ -32,6 +40,14 @@ service cloud.firestore {
           || (request.resource.data.players.white == request.auth.uid
             && request.resource.data.players.black != null
             && request.resource.data.status == 'in_progress')
+          || (request.resource.data.players.black == request.auth.uid
+            && request.resource.data.players.white == null
+            && request.resource.data.status == 'finished'
+            && request.resource.data.ranked == true
+            && request.resource.data.settled.black == false
+            && request.resource.data.settled.white == true
+            && request.resource.data.ratingSnapshot.black
+              == get(/databases/$(database)/documents/players/$(request.auth.uid)).data.score)
         );
 
       // 更新は「参加（白番の空席を自分で埋める）」「既存参加者が自分の手番で着手する」
