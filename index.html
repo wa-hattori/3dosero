@@ -62,6 +62,31 @@
       }
     }
 
+    /* オンライン対戦の一手タイマー・持ち時間表示。status-panelの下に並べる。 */
+    .game-timer-panel {
+      position: absolute;
+      top: calc(76px + env(safe-area-inset-top));
+      left: calc(16px + env(safe-area-inset-left));
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.5);
+      font-size: 0.85rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .game-timer-row {
+      opacity: 0.7;
+    }
+
+    .game-timer-row--active {
+      opacity: 1;
+      font-weight: 700;
+      color: #ffd452;
+    }
+
     .layer-control {
       position: absolute;
       /* iPhoneのホームインジケータと重ならないようセーフエリア分オフセットする。 */
