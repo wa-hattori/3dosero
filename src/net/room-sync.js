@@ -64,6 +64,9 @@ const toRoomState = (roomId, data) => ({
   status: data.status,
   winner: data.winner,
   lastMove: data.lastMove,
+  // ランダムマッチング（レート戦）由来の部屋のみtrue。ルームコード制の部屋には
+  // フィールド自体が無いため、ここで`?? false`にして呼び出し側の分岐を単純にする。
+  ranked: data.ranked ?? false,
 });
 
 /**
@@ -145,6 +148,19 @@ export const submitMove = async ({ roomId, board, boardSize, color, x, y, z }) =
     lastMove: { x, y, z, color },
     updatedAt: serverTimestamp(),
   });
+};
+
+/**
+ * 部屋の対戦者（uid）だけを一度だけ取得する。ランダムマッチング成立直後に
+ * 両者のプレイヤープロフィールを表示する対戦カード用の軽量な読み取りで、
+ * 盤面全体を含む`subscribeToRoom`の購読は不要なため分けてある。
+ * @param {string} roomId - ルームコード
+ * @returns {Promise<{ players: { black: string, white: string | null } } | null>}
+ */
+export const getRoomSummary = async (roomId) => {
+  const snapshot = await getDoc(roomRef(roomId));
+  if (!snapshot.exists()) return null;
+  return { players: snapshot.data().players };
 };
 
 /**

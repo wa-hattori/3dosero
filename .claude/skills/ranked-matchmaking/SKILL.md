@@ -47,20 +47,39 @@ function calculateEloDelta(myScore, opponentScore, result):
 
 標準的なEloレーティング（チェス等で使われるもの）をそのまま採用し、独自のアレンジはしない。「格上に勝つと増分が大きい／格下に負けると減少が大きい」という要望は、この標準Elo式が自然に満たす性質そのものである。
 
-## 階級（5段階）
+## 階級（6段階・素材モチーフ）
 
-スコアから導出する。Firestoreには保存せず、常に`score`から計算する（保存された`tier`と`score`が食い違うおそれをなくすため）。
+スコアから導出する。Firestoreには保存せず、常に`score`から計算する（保存された`tier`と`score`が食い違うおそれをなくすため）。素材が硬く・希少になっていくイメージで並べ、各階級には元素記号を持たせる（[階級アイコン](#階級アイコンtier-icon)節参照）。
 
 ```
+function getTierInfo(score):
+  if score < 1600: return { id: 'iron',            label: 'アイアン',           symbol: 'Fe' }  # DEFAULT_SCORE(1500)はここ
+  if score < 1700: return { id: 'aluminum',         label: 'アルミ',             symbol: 'Al' }
+  if score < 1800: return { id: 'bronze',           label: 'ブロンズ',           symbol: 'Cu' }  # 合金なので構成元素の銅(Cu)を使う
+  if score < 2000: return { id: 'silver',           label: 'シルバー',           symbol: 'Ag' }
+  if score < 3000: return { id: 'diamond',          label: 'ダイヤ',             symbol: 'C'  }  # ダイヤモンドは炭素(C)の同素体
+  else:            return { id: 'carbon-nanotube',  label: 'カーボンナノチューブ', symbol: 'C'  }  # これも炭素(C)の同素体
+
 function getTier(score):
-  if score < 1300: return 'ブロンズ'
-  if score < 1500: return 'シルバー'
-  if score < 1700: return 'ゴールド'      # DEFAULT_SCORE(1500)はここに入るため、初期階級はゴールド
-  if score < 1900: return 'プラチナ'
-  return 'ダイヤモンド'
+  return getTierInfo(score).label
 ```
 
-閾値は初期値であり、実際のスコア分布を見て調整してよい（`src/net/rating.js`の定数を変更するだけで済むようにする）。
+閾値は初期値であり、実際のスコア分布を見て調整してよい（`src/net/rating.js`の定数を変更するだけで済むようにする）。`id`はCSSクラス名・アイコンのバリアント指定に使う安定した識別子（日本語の表示名をCSSクラス名にそのまま使うと事故りやすいため分離してある）。
+
+### 階級アイコン（tier-icon）
+
+コイン型（円形、ベゼル風の内側シャドウ）で中央に元素記号を書いた`<span>`を`src/ui/tier-icon.js`の`createTierIcon(score)`で生成する。ビルドツール・画像アセットを増やさないため、SVGや外部画像ではなく純粋にCSSグラデーションで着色する（`index.html`の`.tier-icon--<id>`）。
+
+| 階級 | 色 |
+|---|---|
+| アイアン(Fe) | 白（やや温かみのあるオフホワイト） |
+| アルミ(Al) | 白（やや冷たみのある明るい白） |
+| ブロンズ(Cu) | 銅色 |
+| シルバー(Ag) | 銀色 |
+| ダイヤ(C) | ターコイズブルー |
+| カーボンナノチューブ(C) | 虹色（conic-gradientで全周を回す） |
+
+`getTier`と違い、アイコン描画には`id`/`symbol`が必要なため、表示系のコードは`getTierInfo(score)`を使う（`getTier`は表示名だけが要る文脈向けの簡易版）。
 
 ## データモデル（Firestore、追加分）
 
@@ -89,6 +108,10 @@ rooms/{roomId}                  # ランダムマッチング由来の部屋の�
 
 部屋作成時に、両者の現在の`score`を`ratingSnapshot`として書き込み、`ranked: true`・`settled: {black: false, white: false}`を設定する。
 
+### マッチ成立時（対局開始前の対戦カード画面）
+
+ランダムマッチングが成立した直後、実際の対局画面に入る前に`src/ui/vs-screen.js`の`createVsScreen`で対戦カード画面を挟む。先手（黒）を上、後手（白）を下に、それぞれ階級アイコン付きの名前とスコアを表示する。対戦相手のプロフィール取得（`getRoomSummary`→`getPlayerProfile`）に失敗した場合もフェイルソフトで対局自体は開始できるようにする（対戦カードの表示は対局そのものの前提条件ではない）。ルームコード制の対局（`create`/`join`）はこの画面を挟まない（対象はランダムマッチングのみ）。
+
 ### 対局終了時（`submitMove`の終局・`forfeitRoom`共通）
 
 対局終了を検知した各クライアントが、**自分の分だけ**を`writeBatch`で以下の2件同時に書き込む。
@@ -107,9 +130,13 @@ function settleRankedResult(roomId, myColor, myResult):
     update players/{myUid}: { score: myScore + delta, gamesPlayed: increment(1), updatedAt }
     update rooms/{roomId}: { settled.{myColor}: true }
   commit batch
+
+  return { beforeScore: myScore, afterScore: myScore + delta, delta }   # 精算しなかった場合はnull
 ```
 
 `myResult`は`winner`フィールドから導出する（自分の色と一致すれば1、相手の色なら0、`winner == null`〈引き分け〉なら0.5）。
+
+戻り値（`null`でない場合）は`src/ui/score-change-screen.js`の`createScoreChangeScreen`に渡し、end-screenの「タイトルに戻る」の後続画面としてスコア変動を可視化する（`before → after`のスコア・変動量・階級が変わった場合の昇格/降格表示）。ルームコード制の対局・既に精算済みの場合は`null`が返るため、その場合はend-screenの「タイトルに戻る」を従来通り即座にページ再読み込みとして扱う。
 
 ## Firestoreセキュリティルール（追加分）
 
@@ -125,10 +152,14 @@ function settleRankedResult(roomId, myColor, myResult):
 
 ## モジュール構成
 
-- `src/net/rating.js` — Elo計算・階級判定の純粋関数（`calculateEloDelta`/`getTier`/`DEFAULT_SCORE`等の定数）。**Firebase依存なし**、Node標準テストで検証する。
-- `src/net/player-profile.js` — `players/{uid}`の作成・名前更新・取得。Firestoreへの実際の読み書き（自動テスト対象外）。
-- `src/net/rating-settlement.js` — 対局終了時のスコア精算（`writeBatch`）。Firestoreへの実際の読み書き（自動テスト対象外）。
-- `src/ui/`にプレイヤーネーム入力ステップ・ランキング画面を追加する。
+- `src/net/rating.js` — Elo計算・階級判定の純粋関数（`calculateEloDelta`/`getTier`/`getTierInfo`/`DEFAULT_SCORE`等の定数）。**Firebase依存なし**、Node標準テストで検証する。
+- `src/net/player-profile.js` — `players/{uid}`の作成・名前更新・取得（`getMyPlayerProfile`は自分、`getPlayerProfile(uid)`は任意のプレイヤー。対戦相手表示に使う）。Firestoreへの実際の読み書き（自動テスト対象外）。
+- `src/net/rating-settlement.js` — 対局終了時のスコア精算（`writeBatch`）。精算結果（`beforeScore`/`afterScore`/`delta`）を呼び出し側に返し、スコア変動画面の描画に使う。Firestoreへの実際の読み書き（自動テスト対象外）。
+- `src/net/room-sync.js` の `getRoomSummary(roomId)` — 対戦カード画面用の軽量な部屋情報の一度読み取り。
+- `src/ui/tier-icon.js` — 階級アイコン（コイン型、CSSグラデーションのみ）のDOM要素生成。
+- `src/ui/vs-screen.js` — マッチ成立時の対戦カード画面。
+- `src/ui/score-change-screen.js` — 対局終了後のスコア変動可視化画面。
+- `src/ui/start-screen.js` — プレイヤーネーム入力ステップ・ランキング画面・プロフィール画面を追加する。
 
 ## 参照
 

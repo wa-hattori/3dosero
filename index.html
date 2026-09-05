@@ -184,6 +184,22 @@
       background: rgba(10, 12, 18, 0.55);
     }
 
+    .start-screen-profile-name {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 8px 0 0;
+      font-size: 1.4rem;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+
+    .start-screen-profile-score {
+      margin: 4px 0 0;
+      opacity: 0.85;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+
     .start-screen-ranking-list {
       list-style: none;
       margin: 16px 0 0;
@@ -219,6 +235,74 @@
 
     .start-screen-back:hover {
       opacity: 1;
+    }
+
+    .vs-screen {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(17, 19, 24, 0.9);
+      text-align: center;
+    }
+
+    .vs-screen h1 {
+      margin: 0 0 4px;
+      font-size: 2rem;
+      letter-spacing: 0.05em;
+    }
+
+    .vs-screen-row {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .vs-screen-color-label {
+      margin: 0;
+      opacity: 0.75;
+      font-size: 0.9rem;
+    }
+
+    .vs-screen-name-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      font-size: 1.3rem;
+    }
+
+    .vs-screen-score-line {
+      margin: 0;
+      opacity: 0.85;
+      font-size: 1rem;
+    }
+
+    .vs-screen-vs-mark {
+      margin: 2px 0;
+      font-size: 1.4rem;
+      font-weight: 700;
+      opacity: 0.6;
+    }
+
+    .vs-screen button {
+      margin-top: 16px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.08);
+      color: inherit;
+      font-size: 1.1rem;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .vs-screen button:hover {
+      background: rgba(255, 255, 255, 0.18);
     }
 
     .end-screen {
@@ -261,6 +345,62 @@
       background: rgba(255, 255, 255, 0.18);
     }
 
+    .score-change-screen {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(17, 19, 24, 0.92);
+      text-align: center;
+    }
+
+    .score-change-screen h1 {
+      margin: 0;
+      font-size: 2rem;
+      letter-spacing: 0.05em;
+    }
+
+    .score-change-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      font-size: 1.3rem;
+    }
+
+    .score-change-delta {
+      margin: 0;
+      font-size: 2.2rem;
+      font-weight: 700;
+    }
+
+    .score-change-delta--up {
+      color: #6fe07a;
+    }
+
+    .score-change-delta--down {
+      color: #ff8a8a;
+    }
+
+    .score-change-screen button {
+      margin-top: 16px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.08);
+      color: inherit;
+      font-size: 1.1rem;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .score-change-screen button:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+
     .mute-toggle {
       position: absolute;
       top: calc(16px + env(safe-area-inset-top));
@@ -298,6 +438,67 @@
 
     .title-button:hover {
       background: rgba(255, 255, 255, 0.18);
+    }
+
+    /* 階級アイコン（コイン型、中央に元素記号）。画像アセットは使わず、
+       階級ごとの色はCSSグラデーションのみで表現する（tier-icon.js参照）。 */
+    .tier-icon {
+      display: inline-flex;
+      flex-shrink: 0;
+      align-items: center;
+      justify-content: center;
+      width: 1.8em;
+      height: 1.8em;
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 0.8rem;
+      line-height: 1;
+      vertical-align: middle;
+      border: 1px solid rgba(0, 0, 0, 0.35);
+      box-shadow:
+        inset 0 1px 2px rgba(255, 255, 255, 0.65),
+        inset 0 -2px 3px rgba(0, 0, 0, 0.25);
+    }
+
+    .tier-icon--iron {
+      background: radial-gradient(circle at 35% 30%, #f5f3ee, #d6d2c6 70%);
+      color: #4a4740;
+    }
+
+    .tier-icon--aluminum {
+      background: radial-gradient(circle at 35% 30%, #ffffff, #dfe6ec 70%);
+      color: #47535e;
+    }
+
+    .tier-icon--bronze {
+      background: radial-gradient(circle at 35% 30%, #dd9c5c, #8a5527 70%);
+      color: #3a2410;
+    }
+
+    .tier-icon--silver {
+      background: radial-gradient(circle at 35% 30%, #f2f2f2, #a6a6a6 70%);
+      color: #333333;
+    }
+
+    .tier-icon--diamond {
+      background: radial-gradient(circle at 35% 30%, #8dfff0, #0fa89f 70%);
+      color: #04302c;
+    }
+
+    .tier-icon--carbon-nanotube {
+      background: conic-gradient(
+        from 0deg,
+        #ff5252,
+        #ffb852,
+        #e9ff52,
+        #52ff7a,
+        #52d4ff,
+        #7a52ff,
+        #ff52d4,
+        #ff5252
+      );
+      color: #14141a;
+      text-shadow: 0 0 3px rgba(255, 255, 255, 0.85);
     }
 
     .version-badge {

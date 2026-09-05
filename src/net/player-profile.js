@@ -13,16 +13,27 @@ const PLAYERS_COLLECTION = 'players';
 const playerRef = (uid) => doc(getFirestoreInstance(), PLAYERS_COLLECTION, uid);
 
 /**
- * 自分のプレイヤープロフィールを取得する。まだ作成していなければ`null`を返す。
+ * 指定したuidのプレイヤープロフィールを取得する。存在しなければ`null`を返す。
+ * 認証は不要（`players`コレクションは誰でも読める設計のため）。対戦相手の
+ * プロフィール表示（マッチング成立時の対戦カード等）に使う。
+ * @param {string} uid - 取得したいプレイヤーのuid
  * @returns {Promise<{ uid: string, name: string, score: number, gamesPlayed: number } | null>}
  */
-export const getMyPlayerProfile = async () => {
-  const uid = await ensureSignedIn();
+export const getPlayerProfile = async (uid) => {
   const snapshot = await getDoc(playerRef(uid));
   if (!snapshot.exists()) return null;
 
   const data = snapshot.data();
   return { uid, name: data.name, score: data.score, gamesPlayed: data.gamesPlayed };
+};
+
+/**
+ * 自分のプレイヤープロフィールを取得する。まだ作成していなければ`null`を返す。
+ * @returns {Promise<{ uid: string, name: string, score: number, gamesPlayed: number } | null>}
+ */
+export const getMyPlayerProfile = async () => {
+  const uid = await ensureSignedIn();
+  return getPlayerProfile(uid);
 };
 
 /**
