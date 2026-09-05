@@ -436,13 +436,11 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
         return;
       }
 
-      subtitle.textContent = 'ランキング（ランダムマッチングの結果のみ集計）';
+      subtitle.textContent = `ランキング 上位${entries.length}名（ランダムマッチングの結果のみ集計）`;
       for (const [index, entry] of entries.entries()) {
         const row = document.createElement('li');
         row.className = 'start-screen-ranking-row';
-        row.textContent =
-          `${index + 1}. ${entry.name}　${entry.score}（${getTier(entry.score)}）　` +
-          `${entry.gamesPlayed}戦`;
+        row.textContent = `${index + 1}. ${entry.name}　${entry.score}`;
         rankingList.appendChild(row);
       }
     } catch (error) {
