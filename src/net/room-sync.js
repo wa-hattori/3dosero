@@ -186,6 +186,25 @@ export const getRoomSummary = async (roomId) => {
 };
 
 /**
+ * ランダムマッチングで成立した部屋の一手タイマーを実際に起動する。対戦カード画面
+ * （vs-screen）を両者が見終えて対局画面に入る瞬間に呼ぶ想定
+ * （[online-match-timer](../../.claude/skills/online-match-timer/SKILL.md)参照。
+ * ルームコード制の部屋は`joinRoom`が対局開始と同時にセットするため、この関数は不要）。
+ * まだセットされていない場合のみ一方向に遷移する。両クライアントがほぼ同時に
+ * 呼んでも、先に届いた方だけが反映され、後続はルール上拒否される
+ * （`submitTimeoutLoss`と同じ早い者勝ちのレース処理）。
+ * @param {string} roomId - ルームコード
+ * @returns {Promise<void>}
+ */
+export const startGameClock = async (roomId) => {
+  try {
+    await updateDoc(roomRef(roomId), { turnStartedAt: serverTimestamp() });
+  } catch {
+    // 相手クライアントが既に起動済みの場合、ルール上拒否される。無視してよい。
+  }
+};
+
+/**
  * 部屋の状態変化をリアルタイムに購読する。
  * @param {string} roomId - ルームコード
  * @param {(roomState: object) => void} onChange - 部屋の状態が変わるたびに呼ばれるコールバック

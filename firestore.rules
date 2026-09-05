@@ -48,7 +48,8 @@ service cloud.firestore {
           || (isMyTurn(resource.data) && isValidTimeBankUpdate(resource.data, request.resource.data))
           || isForfeiting(resource.data, request.resource.data)
           || isSettling(resource.data, request.resource.data)
-          || isTimingOut(resource.data, request.resource.data));
+          || isTimingOut(resource.data, request.resource.data)
+          || isStartingClock(resource.data, request.resource.data));
 
       function isJoining(before, after) {
         return before.players.white == null && after.players.white == request.auth.uid;
@@ -89,6 +90,21 @@ service cloud.firestore {
           && before.status == 'in_progress'
           && after.status == 'finished'
           && after.winner == expectedWinner;
+      }
+
+      // ランダムマッチング成立時はまだ`turnStartedAt`をセットせず(対戦カード画面
+      // 〈vs-screen〉を見ている間は一手タイマーを消費させないため)、対局画面に
+      // 実際に入る瞬間に改めてセットする。`before.turnStartedAt == null`のときのみ
+      // 許可する一方向の遷移にすることで、途中の手番でタイマーをリセットし続ける
+      // 不正（無限に自分の手番を引き延ばす）を防ぐ。参加者のどちらが呼んでも
+      // よい（対戦カード画面の終了は両クライアントでほぼ同時に起きるため）。
+      function isStartingClock(before, after) {
+        let requesterIsParticipant = before.players.black == request.auth.uid
+          || before.players.white == request.auth.uid;
+        return requesterIsParticipant
+          && before.status == 'in_progress'
+          && before.turnStartedAt == null
+          && after.turnStartedAt != null;
       }
 
       // 「タイトルに戻る」等で対局を放棄する場合。相手の手番中でも離脱できる必要が

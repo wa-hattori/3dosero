@@ -50,7 +50,7 @@ rooms/{roomId}                  # オンライン対戦の部屋すべて（ル�
 ```
 
 - `timeBank`はルームコード制の部屋も含め全部屋に持たせる（`ranked`のようにレート戦限定のフィールドではない）。
-- `turnStartedAt`は「両者が揃って対局が実際に始まった瞬間」にセットする。ルームコード制では`createRoom`の時点ではまだ相手がいないため、`joinRoom`（白番が参加し`status`が`in_progress`になる瞬間）でセットする。ランダムマッチングでは`tryClaimCandidate`が部屋を`in_progress`で直接作るため、作成時にセットする。
+- `turnStartedAt`は「対局画面が実際に表示された瞬間」にセットする。ルームコード制では`createRoom`の時点ではまだ相手がいないため、`joinRoom`（白番が参加し`status`が`in_progress`になる瞬間、対局画面へそのまま入る）でセットする。**ランダムマッチングは`tryClaimCandidate`の時点ではまだセットしない**（`null`のまま）。マッチ成立後は対戦カード画面〈vs-screen〉を数秒〜5秒挟むため、ここでセットしてしまうと黒番の最初の一手タイマーがその間に消費されてしまう。対戦カード画面が終わり実際に対局画面へ入る瞬間に`startGameClock(roomId)`（`src/net/room-sync.js`）が改めてセットする。
 
 ## 時刻の同期についての既知の限界
 
@@ -88,6 +88,7 @@ function onTick(room):
 
 - **`isMyTurn`（既存の着手ケース）に、`timeBank`の変動幅チェックを追加する**: 自分の色の`timeBank`だけが変化し、かつ変化後の値が`0`以上・変化前の値`+ MOVE_TIME_LIMIT_MS`以下であることを検証する（[ranked-matchmaking](../ranked-matchmaking/SKILL.md)の`MAX_SCORE_DELTA`と同じ、1回の書き込みあたりの変動幅を絞るだけの軽量な不正防止）。相手側の`timeBank`は不変であることも検証する。`30000`はこのファイル冒頭の`MOVE_TIME_LIMIT_MS`をそのまま数値リテラルにしたもの（ルール言語からはJSの定数をimportできない事情は他の箇所と同じ）。
 - **`isTimingOut`（新規ケース）**: 部屋の参加者（黒番・白番どちらでもよい。相手のタイムアウトを検知して書き込む場合があるため）が、`status: 'in_progress' → 'finished'`にでき、かつ`winner`が「タイムアウトが起きた時点で手番だった側の逆の色」と一致する場合のみ許可する。
+- **`isStartingClock`（新規ケース）**: 部屋の参加者が、`turnStartedAt`を`null`から非`null`へ一方向に遷移させられる（`before.turnStartedAt == null`の場合のみ許可）。対局中の任意のタイミングで呼べてしまうと「自分の手番のたびにリセットして時間切れを回避し続ける」不正が成立してしまうため、この一度きりの遷移に厳しく限定してある。
 
 ```
 function isValidTimeBankUpdate(before, after):
@@ -104,6 +105,13 @@ function isTimingOut(before, after):
     && before.status == 'in_progress'
     && after.status == 'finished'
     && after.winner == expectedWinner
+
+function isStartingClock(before, after):
+  requesterIsParticipant = before.players.black == request.auth.uid || before.players.white == request.auth.uid
+  return requesterIsParticipant
+    && before.status == 'in_progress'
+    && before.turnStartedAt == null
+    && after.turnStartedAt != null
 ```
 
 ### 既知の限界（不正防止）
@@ -117,8 +125,8 @@ function isTimingOut(before, after):
 ## モジュール構成
 
 - `src/net/game-timer.js` — 時間計算の純粋関数。**Firebase依存なし**、Node標準テストで検証する。
-- `src/net/room-sync.js` — `createRoom`/`joinRoom`/`submitMove`が`timeBank`/`turnStartedAt`を読み書きする。`submitTimeoutLoss(roomId, timedOutColor)`を追加する。
-- `src/net/matchmaking.js` — `tryClaimCandidate`が部屋作成時に`timeBank`/`turnStartedAt`を初期化する。
+- `src/net/room-sync.js` — `createRoom`/`joinRoom`/`submitMove`が`timeBank`/`turnStartedAt`を読み書きする。`submitTimeoutLoss(roomId, timedOutColor)`、`startGameClock(roomId)`を追加する。
+- `src/net/matchmaking.js` — `tryClaimCandidate`が部屋作成時に`timeBank`を初期化する（`turnStartedAt`は`null`のまま。上記「マッチ成立時」参照）。
 - `src/ui/game-timer-view.js` — 時計の描画・ローカルでのtick・タイムアウト検知（`onTimeout`コールバック経由で`submitTimeoutLoss`を呼ぶのは呼び出し側`src/main.js`の責務）。
 - `src/audio/countdown-beep.js` — カウントダウン音の再生。
 - `src/ui/vs-screen.js` — ランダムマッチングの対戦カード画面。「対局開始」ボタンを押さなくても5秒（`AUTO_START_DELAY_MS`）で自動的に対局が始まる。

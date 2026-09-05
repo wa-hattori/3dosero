@@ -76,10 +76,13 @@ const tryClaimCandidate = async ({ db, candidateRef, myTicketRef, myUid, boardSi
       ranked: true,
       ratingSnapshot: { black: opponentScore, white: myScore },
       settled: { black: false, white: false },
-      // ランダムマッチングは両者が揃った状態で部屋を直接作るため、この時点で
-      // 対局が実際に始まる（[online-match-timer](../../.claude/skills/online-match-timer/SKILL.md)参照）。
       timeBank: createInitialTimeBank(),
-      turnStartedAt: serverTimestamp(),
+      // ここではまだセットしない。マッチ成立後、対戦カード画面（vs-screen）を
+      // 両者が見終えて実際に対局画面に入るまでには数秒かかりうるため、ここで
+      // serverTimestamp()を入れてしまうと黒番の最初の一手タイマーがその間に
+      // 消費されてしまう。`startGameClock`が対戦カード画面の終了時点で改めて
+      // セットする（[online-match-timer](../../.claude/skills/online-match-timer/SKILL.md)参照）。
+      turnStartedAt: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });

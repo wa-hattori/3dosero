@@ -12,7 +12,7 @@ import {
 import { cancelRandomMatch, requestRandomMatch, subscribeToTicket } from '../net/matchmaking.js';
 import { ROOM_CODE_LENGTH, isValidRoomCode } from '../net/room-code.js';
 import { createPlayerProfile, getMyPlayerProfile, getPlayerProfile } from '../net/player-profile.js';
-import { getRoomSummary } from '../net/room-sync.js';
+import { getRoomSummary, startGameClock } from '../net/room-sync.js';
 import { MAX_NAME_LENGTH, getTier } from '../net/rating.js';
 import { fetchLeaderboard } from '../net/leaderboard.js';
 import { createTierIcon } from './tier-icon.js';
@@ -303,7 +303,12 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
       createVsScreen(container, {
         black,
         white,
-        onStart: () => finishSelection({ online: { roomId, color } }),
+        onStart: () => {
+          // 対戦カード画面を見終えた瞬間に一手タイマーを起動する（マッチ成立時点
+          // ではまだ起動しない理由は`startGameClock`のJSDoc参照）。
+          startGameClock(roomId);
+          finishSelection({ online: { roomId, color } });
+        },
       });
     } catch (error) {
       console.error('対戦相手情報の取得に失敗しました', error);
