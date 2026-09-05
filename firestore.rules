@@ -70,6 +70,32 @@ service cloud.firestore {
       }
     }
 
+    match /players/{playerId} {
+      // ランキング表示のため、誰でも読める。
+      allow read: if true;
+
+      // 新規作成は本人のuidでのみ、名前は1〜20文字、スコア・対局数は初期値のみ許可する。
+      // 1500/20はsrc/net/rating.jsのDEFAULT_SCORE/MAX_NAME_LENGTHをそのまま数値
+      // リテラルにしたもの(ルール言語からはJSの定数をimportできないため。
+      // currentTurnのBLACK(1)/WHITE(2)と同じ事情)。定数を変更したらここも合わせる。
+      allow create: if request.auth != null
+        && request.auth.uid == playerId
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 20
+        && request.resource.data.score == 1500
+        && request.resource.data.gamesPlayed == 0;
+
+      // 名前の変更（スコア・対局数は変えない）。
+      allow update: if request.auth != null
+        && request.auth.uid == playerId
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 20
+        && request.resource.data.score == resource.data.score
+        && request.resource.data.gamesPlayed == resource.data.gamesPlayed;
+    }
+
     match /matchmakingQueue/{ticketId} {
       allow read: if request.auth != null;
 
