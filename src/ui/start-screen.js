@@ -14,6 +14,7 @@ import { ROOM_CODE_LENGTH, isValidRoomCode } from '../net/room-code.js';
 import { createPlayerProfile, getMyPlayerProfile, getPlayerProfile } from '../net/player-profile.js';
 import { getRoomSummary, startGameClock } from '../net/room-sync.js';
 import { MAX_NAME_LENGTH, getTier } from '../net/rating.js';
+import { FALLBACK_WAIT_MS, getFallbackCpuLevel } from '../net/matchmaking-cpu-fallback.js';
 import { fetchLeaderboard } from '../net/leaderboard.js';
 import { createTierIcon } from './tier-icon.js';
 import { createVsScreen } from './vs-screen.js';
@@ -49,10 +50,12 @@ const cpuLevelLabel = (level) => {
  * ランダムマッチングまで完了させてから `onStart` を呼ぶ（対局画面側は接続済みの
  * 状態を受け取るだけでよい）。選択が完了すると自身をDOMから取り除く。
  * @param {HTMLElement} container - 追加先要素
- * @param {(selection: { battleMode: string, boardSize: number, cpuLevel: number | null, online: { roomId: string, color: number } | null, humanColor: number | null }) => void} onStart -
+ * @param {(selection: { battleMode: string, boardSize: number, cpuLevel: number | null, online: { roomId: string, color: number } | null, humanColor: number | null, rankedCpuMatch: { cpuLevel: number } | null }) => void} onStart -
  *   選択完了時に呼ばれる。`cpuLevel` はCPU対戦モード以外では `null`。`online` は
  *   オンライン対戦モードでの接続確立後のみ非`null`（`roomId`と自分の色）。`humanColor` は
- *   CPU対戦モードで人間が選んだ先手/後手の色（`BLACK`/`WHITE`）で、それ以外のモードでは`null`
+ *   CPU対戦モードで人間が選んだ先手/後手の色（`BLACK`/`WHITE`）で、それ以外のモードでは`null`。
+ *   `rankedCpuMatch` はランダムマッチングが1分成立せずCPU代替対戦になった場合のみ
+ *   非`null`（対局終了後にレート戦として精算する必要があることを示す）
  * @param {() => void} [onFirstInteraction] - モード選択ボタンの最初のクリック時に呼ばれる。
  *   `<audio>.play()`はブラウザの自動再生ポリシー上、ボタン自身のクリックハンドラ内など
  *   ユーザー操作に直接応答する形で同期的に呼ばれた場合に最も確実に許可される
@@ -101,6 +104,9 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
   // 別ステップに移動する・画面を閉じる際に必ず購読解除する。
   let activeUnsubscribe = null;
   let activeTicketId = null;
+  // ランダムマッチングが一定時間成立しない場合のCPU代替対戦（[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)の
+  // 「CPU代替対戦」参照）。
+  let fallbackTimeoutId = null;
 
   const stopActiveSubscription = () => {
     if (activeUnsubscribe) {
@@ -118,9 +124,17 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     });
   };
 
+  const clearFallbackTimeout = () => {
+    if (fallbackTimeoutId !== null) {
+      clearTimeout(fallbackTimeoutId);
+      fallbackTimeoutId = null;
+    }
+  };
+
   const dispose = () => {
     stopActiveSubscription();
     cancelActiveTicketIfAny();
+    clearFallbackTimeout();
     overlay.remove();
   };
 
@@ -137,15 +151,22 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     errorMessage.textContent = '';
   };
 
-  const finishSelection = ({ cpuLevel = null, online = null, humanColor = null } = {}) => {
+  const finishSelection = ({
+    battleMode = selectedBattleMode,
+    cpuLevel = null,
+    online = null,
+    humanColor = null,
+    rankedCpuMatch = null,
+  } = {}) => {
     stopActiveSubscription();
     dispose();
     onStart({
-      battleMode: selectedBattleMode,
+      battleMode,
       boardSize: selectedBoardSize,
       cpuLevel,
       online,
       humanColor,
+      rankedCpuMatch,
     });
   };
 
@@ -316,6 +337,18 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     }
   };
 
+  /**
+   * ランダムマッチングが`FALLBACK_WAIT_MS`以内に成立しなかった場合、待機を取りやめ
+   * 同じ階級のCPUとの対局に切り替える（[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)の
+   * 「CPU代替対戦」参照）。対局終了後のレート精算に使うCPUレベルを`rankedCpuMatch`
+   * として渡す。
+   * @param {number} myScore - 現在の自分のスコア
+   */
+  const startCpuFallbackMatch = (myScore) => {
+    const cpuLevel = getFallbackCpuLevel(myScore);
+    finishSelection({ battleMode: 'cpu', cpuLevel, humanColor: BLACK, rankedCpuMatch: { cpuLevel } });
+  };
+
   const startRandomMatch = async () => {
     clearError();
     // レート戦（ランダムマッチング）にはプレイヤーネームが必須。未設定なら先に設定させる
@@ -329,7 +362,9 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
         return;
       }
 
-      showOnlineWaitingStep('対戦相手を探しています…');
+      showOnlineWaitingStep(
+        '対戦相手を探しています…\n（1分見つからない場合は同ランクのCPUと対戦します）',
+      );
       const { ticketId, roomId } = await requestRandomMatch(selectedBoardSize);
       if (roomId) {
         // 自分が既存の待機チケットを見つけてマッチさせた側 = 白番。
@@ -342,9 +377,14 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
         // 他プレイヤーに見つけられてマッチした側 = 黒番。マッチ成立後はもう
         // キャンセル対象のチケットではないため、dispose時の誤キャンセルを防ぐ。
         activeTicketId = null;
+        clearFallbackTimeout();
         stopActiveSubscription();
         proceedToRankedMatch({ roomId: ticket.roomId, color: BLACK });
       });
+      fallbackTimeoutId = setTimeout(() => {
+        fallbackTimeoutId = null;
+        startCpuFallbackMatch(profile.score);
+      }, FALLBACK_WAIT_MS);
     } catch (error) {
       console.error('ランダムマッチングに失敗しました', error);
       showOnlineMethodStep();
@@ -552,6 +592,7 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     if (currentStep === 'onlineWaiting') {
       stopActiveSubscription();
       cancelActiveTicketIfAny();
+      clearFallbackTimeout();
       showOnlineMethodStep();
       return;
     }

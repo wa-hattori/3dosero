@@ -5,7 +5,7 @@ import { chooseRandomMove, RANDOM_CPU_LEVEL } from './logic/cpu.js';
 import { loadModelSession } from './ai/model-loader.js';
 import { chooseGanMove } from './ai/gan-cpu.js';
 import { submitMove, subscribeToRoom, forfeitRoom, submitTimeoutLoss } from './net/room-sync.js';
-import { settleRankedResult } from './net/rating-settlement.js';
+import { settleRankedResult, settleRankedCpuMatch } from './net/rating-settlement.js';
 import { MATCH_RESULT } from './net/rating.js';
 import { notifyGameEnded } from './ads/interstitial-ads.js';
 import { createSceneManager } from './render/scene-manager.js';
@@ -85,10 +85,12 @@ createVersionBadge(uiOverlay);
  * 3Dシーン・ゲーム状態・UIを一式構築する。オンライン対戦モードでは、盤面の実体は
  * Firestore側にあり、ここでの`board`/`currentTurn`等はその購読結果のミラーに過ぎない
  * （[online-multiplayer](../.claude/skills/online-multiplayer/SKILL.md)参照）。
- * @param {{ battleMode: string, boardSize: number, cpuLevel: number | null, online: { roomId: string, color: number } | null, humanColor: number | null }} selection -
- *   スタート画面での選択内容
+ * @param {{ battleMode: string, boardSize: number, cpuLevel: number | null, online: { roomId: string, color: number } | null, humanColor: number | null, rankedCpuMatch: { cpuLevel: number } | null }} selection -
+ *   スタート画面での選択内容。`rankedCpuMatch`はランダムマッチングが不成立で
+ *   CPU代替対戦になった場合のみ非`null`（[ranked-matchmaking](../.claude/skills/ranked-matchmaking/SKILL.md)の
+ *   「CPU代替対戦」参照）
  */
-const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
+const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor, rankedCpuMatch }) => {
   heroScene.stop();
   heroCanvas.style.display = 'none';
   bgmPlayer.play('battle');
@@ -171,6 +173,26 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
   // 画面を重複生成しないようにするため）。
   let resultScreensShown = false;
 
+  /**
+   * 終了画面を表示する。レート戦の精算結果（`settlement`）があれば、「タイトルに戻る」
+   * ボタンの代わりにスコア変動画面へ繋げる（未精算・非レート戦では`null`を渡し、
+   * これまで通り即座にタイトルへ戻る）。オンライン対戦・CPU代替対戦の両方から使う
+   * 共通部分（[ranked-matchmaking](../.claude/skills/ranked-matchmaking/SKILL.md)参照）。
+   * @param {{ beforeScore: number, afterScore: number, delta: number } | null} settlement
+   */
+  const showEndScreen = (settlement) => {
+    const endScreen = createEndScreen(uiOverlay, {
+      winner,
+      counts: countStones(board),
+      onContinue: settlement
+        ? () => {
+            endScreen.dispose();
+            createScoreChangeScreen(uiOverlay, settlement);
+          }
+        : undefined,
+    });
+  };
+
   if (battleMode === 'online') {
     // オンライン対戦では盤面の実体をFirestore側に置き、この購読が状態更新の
     // 唯一の経路になる（自分の着手の反映も、相手の着手の反映も同じ経路を通る）。
@@ -196,18 +218,7 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
           // 押させたくない（見た目上は隠れていても、キーボード操作等では届いてしまう）。
           titleButton.dispose();
           gameTimerView.dispose();
-          const endScreen = createEndScreen(uiOverlay, {
-            winner,
-            counts: countStones(board),
-            // レート戦でスコアが精算できた場合のみ、「タイトルに戻る」の代わりに
-            // スコア変動画面を挟む（未精算・非レート戦ではこれまで通り即座に戻る）。
-            onContinue: settlement
-              ? () => {
-                  endScreen.dispose();
-                  createScoreChangeScreen(uiOverlay, settlement);
-                }
-              : undefined,
-          });
+          showEndScreen(settlement);
         };
 
         if (!room.ranked) {
@@ -273,7 +284,27 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
     if (isOver) {
       notifyGameEnded();
       titleButton.dispose();
-      createEndScreen(uiOverlay, { winner, counts: countStones(board) });
+
+      // ランダムマッチングが不成立でCPU代替対戦になった場合のみ、対人戦のレート戦と
+      // 同じ精算コードを通してスコア変動画面まで繋げる（[ranked-matchmaking](../.claude/skills/ranked-matchmaking/SKILL.md)の
+      // 「CPU代替対戦」参照）。通常のCPU対戦・2人対戦はレートに影響しない。
+      if (rankedCpuMatch) {
+        const myResult =
+          winner === null
+            ? MATCH_RESULT.DRAW
+            : winner === humanColor
+              ? MATCH_RESULT.WIN
+              : MATCH_RESULT.LOSS;
+        settleRankedCpuMatch({ boardSize, board, cpuLevel: rankedCpuMatch.cpuLevel, myResult })
+          .then((settlement) => showEndScreen(settlement))
+          .catch((error) => {
+            console.error('CPU代替対戦の結果精算に失敗しました', error);
+            showEndScreen(null);
+          });
+        return;
+      }
+
+      showEndScreen(null);
       return;
     }
 
