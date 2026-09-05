@@ -36,7 +36,8 @@ service cloud.firestore {
 
       // 更新は「参加（白番の空席を自分で埋める）」「既存参加者が自分の手番で着手する」
       // 「既存参加者が対局を放棄する（相手の手番中でも可）」「レート戦の結果を自分の分
-      // だけ精算済みにする」のいずれかである場合のみ許可する。
+      // だけ精算済みにする」「一手タイマー/持ち時間の時間切れを報告する」のいずれかで
+      // ある場合のみ許可する。
       // 【注意】これらのケースは前提条件が互いに異なる(参加は「まだ参加者でない」人が
       // 行う操作、着手は「既に参加者かつ自分の手番」の人が行う操作、放棄は「既に参加者
       // だが手番は問わない」人が行う操作)ので、共通の前提条件として先にANDで課しては
@@ -44,9 +45,10 @@ service cloud.firestore {
       // 不具合)。ケースごとに個別の条件式にする。
       allow update: if request.auth != null
         && (isJoining(resource.data, request.resource.data)
-          || isMyTurn(resource.data)
+          || (isMyTurn(resource.data) && isValidTimeBankUpdate(resource.data, request.resource.data))
           || isForfeiting(resource.data, request.resource.data)
-          || isSettling(resource.data, request.resource.data));
+          || isSettling(resource.data, request.resource.data)
+          || isTimingOut(resource.data, request.resource.data));
 
       function isJoining(before, after) {
         return before.players.white == null && after.players.white == request.auth.uid;
@@ -57,6 +59,36 @@ service cloud.firestore {
         // (ルール言語からはJSの定数をimportできないため、ここでは数値リテラルで比較する)。
         return (room.currentTurn == 1 && room.players.black == request.auth.uid)
           || (room.currentTurn == 2 && room.players.white == request.auth.uid);
+      }
+
+      // 一手タイマー・持ち時間（[online-match-timer](../../.claude/skills/online-match-timer/SKILL.md)参照）。
+      // 自分の色のtimeBankだけが、1手あたりの変動幅（±MOVE_TIME_LIMIT_MS）の範囲内で
+      // 変化していることを検証する。30000はsrc/net/game-timer.jsのMOVE_TIME_LIMIT_MSを
+      // そのまま数値リテラルにしたもの(ルール言語からはJSの定数をimportできない事情は
+      // 他の箇所と同じ)。1回の書き込みあたりの変動幅を絞るだけの軽量な不正防止であり、
+      // 「毎回elapsedMs:0を偽り続けて持ち時間を際限なく水増しする」ような継続的な不正
+      // までは防げない（既知の限界。ranked-matchmakingのMAX_SCORE_DELTAと同じ思想）。
+      function isValidTimeBankUpdate(before, after) {
+        let moverKey = before.currentTurn == 1 ? 'black' : 'white';
+        let opponentKey = moverKey == 'black' ? 'white' : 'black';
+        return after.timeBank[opponentKey] == before.timeBank[opponentKey]
+          && after.timeBank[moverKey] >= 0
+          && after.timeBank[moverKey] <= before.timeBank[moverKey] + 30000;
+      }
+
+      // 一手タイマー・持ち時間の時間切れによる無条件敗北の報告。両クライアントが
+      // それぞれローカルで検知するため、報告者は参加者のどちらでもよい（自分自身の
+      // タイムアウトを自分で報告する場合も、相手のタイムアウトに気づいて報告する
+      // 場合もある）。勝者は「タイムアウトが起きた時点で手番だった側の逆の色」で
+      // なければならない（報告者が自分を勝者にするような改ざんはできない）。
+      function isTimingOut(before, after) {
+        let requesterIsParticipant = before.players.black == request.auth.uid
+          || before.players.white == request.auth.uid;
+        let expectedWinner = before.currentTurn == 1 ? 2 : 1;
+        return requesterIsParticipant
+          && before.status == 'in_progress'
+          && after.status == 'finished'
+          && after.winner == expectedWinner;
       }
 
       // 「タイトルに戻る」等で対局を放棄する場合。相手の手番中でも離脱できる必要が
