@@ -35,8 +35,8 @@ service cloud.firestore {
         );
 
       // 更新は「参加（白番の空席を自分で埋める）」「既存参加者が自分の手番で着手する」
-      // 「既存参加者が対局を放棄する（相手の手番中でも可）」のいずれかである場合のみ
-      // 許可する。
+      // 「既存参加者が対局を放棄する（相手の手番中でも可）」「レート戦の結果を自分の分
+      // だけ精算済みにする」のいずれかである場合のみ許可する。
       // 【注意】これらのケースは前提条件が互いに異なる(参加は「まだ参加者でない」人が
       // 行う操作、着手は「既に参加者かつ自分の手番」の人が行う操作、放棄は「既に参加者
       // だが手番は問わない」人が行う操作)ので、共通の前提条件として先にANDで課しては
@@ -45,7 +45,8 @@ service cloud.firestore {
       allow update: if request.auth != null
         && (isJoining(resource.data, request.resource.data)
           || isMyTurn(resource.data)
-          || isForfeiting(resource.data, request.resource.data));
+          || isForfeiting(resource.data, request.resource.data)
+          || isSettling(resource.data, request.resource.data));
 
       function isJoining(before, after) {
         return before.players.white == null && after.players.white == request.auth.uid;
@@ -67,6 +68,22 @@ service cloud.firestore {
         return before.status == 'in_progress'
           && after.status == 'finished'
           && ((amBlack && after.winner == 2) || (amWhite && after.winner == 1));
+      }
+
+      // レート戦（ランダムマッチング）の対局結果を自分の分だけ精算済みにする
+      // （[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)の
+      // 「不正防止の方針」参照）。対局が終了済み・レート戦であること、自分がまだ
+      // 精算していないことを確認した上で、自分の色の`settled`だけをtrueにする
+      // 一方向の遷移のみ許可する。
+      function isSettling(before, after) {
+        return before.status == 'finished'
+          && before.ranked == true
+          && (
+            (before.players.black == request.auth.uid
+              && before.settled.black == false && after.settled.black == true)
+            || (before.players.white == request.auth.uid
+              && before.settled.white == false && after.settled.white == true)
+          );
       }
     }
 
@@ -94,6 +111,31 @@ service cloud.firestore {
         && request.resource.data.name.size() <= 20
         && request.resource.data.score == resource.data.score
         && request.resource.data.gamesPlayed == resource.data.gamesPlayed;
+
+      // レート戦（ランダムマッチング）の結果によるスコア更新（名前は変えない）。
+      // 32はsrc/net/rating.jsのMAX_SCORE_DELTA(=K_FACTOR)をそのまま数値リテラルに
+      // したもの(ルール言語からはJSの定数をimportできない事情は他の箇所と同じ)。
+      // `lastSettledRoomId`で参照した部屋が実在し、終了済みのレート戦で、
+      // 自分がまだこの部屋の結果を精算していないことをget()で確認する
+      // （[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)の
+      // 「不正防止の方針」参照。既知の限界も同節に記載）。
+      allow update: if request.auth != null
+        && request.auth.uid == playerId
+        && request.resource.data.name == resource.data.name
+        && request.resource.data.gamesPlayed == resource.data.gamesPlayed + 1
+        && request.resource.data.score >= resource.data.score - 32
+        && request.resource.data.score <= resource.data.score + 32
+        && isReferencingUnsettledRankedWin(request.resource.data.lastSettledRoomId);
+
+      function isReferencingUnsettledRankedWin(roomId) {
+        let room = get(/databases/$(database)/documents/rooms/$(roomId)).data;
+        return room.status == 'finished'
+          && room.ranked == true
+          && (
+            (room.players.black == request.auth.uid && room.settled.black == false)
+            || (room.players.white == request.auth.uid && room.settled.white == false)
+          );
+      }
     }
 
     match /matchmakingQueue/{ticketId} {

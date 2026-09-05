@@ -25,9 +25,11 @@ import { BLACK, createInitialBoard } from '../logic/board.js';
 import { serializeBoard } from './board-serialization.js';
 import { ensureSignedIn, getFirestoreInstance } from './firebase-init.js';
 import { generateRoomCode } from './room-code.js';
+import { DEFAULT_SCORE } from './rating.js';
 
 const QUEUE_COLLECTION = 'matchmakingQueue';
 const ROOMS_COLLECTION = 'rooms';
+const PLAYERS_COLLECTION = 'players';
 
 /** 1回のマッチング試行で確認する待機中チケットの最大数。 */
 const MAX_CANDIDATES = 5;
@@ -48,16 +50,31 @@ const tryClaimCandidate = async ({ db, candidateRef, myTicketRef, myUid, boardSi
   runTransaction(db, async (transaction) => {
     const freshCandidate = await transaction.get(candidateRef);
     if (!freshCandidate.exists() || freshCandidate.data().status !== 'waiting') return null;
+    const opponentUid = freshCandidate.data().uid;
+
+    // レーティング戦（ランダムマッチングのみ対象）のため、マッチ成立時点の
+    // 両者のスコアを部屋にスナップショットしておく（対局後のElo計算の基準値。
+    // [ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)参照）。
+    // プロフィール未作成（万一の異常系）はDEFAULT_SCORE扱いにして、
+    // マッチング自体は止めない。
+    // Firestoreのトランザクション内では読み取りを順番に(並行にせず)行う必要がある。
+    const myProfile = await transaction.get(doc(db, PLAYERS_COLLECTION, myUid));
+    const opponentProfile = await transaction.get(doc(db, PLAYERS_COLLECTION, opponentUid));
+    const myScore = myProfile.exists() ? myProfile.data().score : DEFAULT_SCORE;
+    const opponentScore = opponentProfile.exists() ? opponentProfile.data().score : DEFAULT_SCORE;
 
     const roomId = generateRoomCode();
     transaction.set(doc(db, ROOMS_COLLECTION, roomId), {
       boardSize,
       board: serializeBoard(createInitialBoard(boardSize)),
-      players: { black: freshCandidate.data().uid, white: myUid },
+      players: { black: opponentUid, white: myUid },
       currentTurn: BLACK,
       status: 'in_progress',
       winner: null,
       lastMove: null,
+      ranked: true,
+      ratingSnapshot: { black: opponentScore, white: myScore },
+      settled: { black: false, white: false },
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
