@@ -12,7 +12,8 @@ import {
 import { cancelRandomMatch, requestRandomMatch, subscribeToTicket } from '../net/matchmaking.js';
 import { ROOM_CODE_LENGTH, isValidRoomCode } from '../net/room-code.js';
 import { createPlayerProfile, getMyPlayerProfile } from '../net/player-profile.js';
-import { MAX_NAME_LENGTH } from '../net/rating.js';
+import { MAX_NAME_LENGTH, getTier } from '../net/rating.js';
+import { fetchLeaderboard } from '../net/leaderboard.js';
 
 const BATTLE_MODES = [
   { id: 'cpu', label: 'CPU対戦' },
@@ -71,6 +72,10 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
   buttonRow.className = 'start-screen-modes';
   overlay.appendChild(buttonRow);
 
+  const rankingList = document.createElement('ol');
+  rankingList.className = 'start-screen-ranking-list';
+  overlay.appendChild(rankingList);
+
   const errorMessage = document.createElement('p');
   errorMessage.className = 'start-screen-error';
   overlay.appendChild(errorMessage);
@@ -118,6 +123,7 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
 
   const clearButtons = () => {
     buttonRow.replaceChildren();
+    rankingList.replaceChildren();
   };
 
   const showError = (message) => {
@@ -387,6 +393,40 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     }
   };
 
+  const showRankingStep = async () => {
+    subtitle.textContent = 'ランキングを読み込んでいます…';
+    backButton.hidden = false;
+    backButton.textContent = '← モード選択に戻る';
+    currentStep = 'ranking';
+    clearError();
+    clearButtons();
+
+    try {
+      const entries = await fetchLeaderboard();
+      if (currentStep !== 'ranking') return; // 読み込み中に他の画面へ移動していたら何もしない
+
+      if (entries.length === 0) {
+        subtitle.textContent = 'まだランキングデータがありません（ランダムマッチングで対局すると登録されます）';
+        return;
+      }
+
+      subtitle.textContent = 'ランキング（ランダムマッチングの結果のみ集計）';
+      for (const [index, entry] of entries.entries()) {
+        const row = document.createElement('li');
+        row.className = 'start-screen-ranking-row';
+        row.textContent =
+          `${index + 1}. ${entry.name}　${entry.score}（${getTier(entry.score)}）　` +
+          `${entry.gamesPlayed}戦`;
+        rankingList.appendChild(row);
+      }
+    } catch (error) {
+      console.error('ランキングの取得に失敗しました', error);
+      if (currentStep === 'ranking') {
+        subtitle.textContent = 'ランキングの取得に失敗しました。もう一度お試しください。';
+      }
+    }
+  };
+
   const showBattleModeStep = () => {
     subtitle.textContent = '対戦モードを選んでください';
     backButton.hidden = true;
@@ -406,6 +446,15 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
       });
       buttonRow.appendChild(button);
     }
+
+    const rankingButton = document.createElement('button');
+    rankingButton.type = 'button';
+    rankingButton.textContent = 'ランキングを見る';
+    rankingButton.addEventListener('click', () => {
+      playClickSound();
+      showRankingStep();
+    });
+    buttonRow.appendChild(rankingButton);
   };
 
   backButton.addEventListener('click', () => {
