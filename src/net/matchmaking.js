@@ -26,6 +26,7 @@ import { serializeBoard } from './board-serialization.js';
 import { ensureSignedIn, getFirestoreInstance } from './firebase-init.js';
 import { generateRoomCode } from './room-code.js';
 import { DEFAULT_SCORE } from './rating.js';
+import { createInitialTimeBank } from './game-timer.js';
 
 const QUEUE_COLLECTION = 'matchmakingQueue';
 const ROOMS_COLLECTION = 'rooms';
@@ -75,6 +76,13 @@ const tryClaimCandidate = async ({ db, candidateRef, myTicketRef, myUid, boardSi
       ranked: true,
       ratingSnapshot: { black: opponentScore, white: myScore },
       settled: { black: false, white: false },
+      timeBank: createInitialTimeBank(),
+      // ここではまだセットしない。マッチ成立後、対戦カード画面（vs-screen）を
+      // 両者が見終えて実際に対局画面に入るまでには数秒かかりうるため、ここで
+      // serverTimestamp()を入れてしまうと黒番の最初の一手タイマーがその間に
+      // 消費されてしまう。`startGameClock`が対戦カード画面の終了時点で改めて
+      // セットする（[online-match-timer](../../.claude/skills/online-match-timer/SKILL.md)参照）。
+      turnStartedAt: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });

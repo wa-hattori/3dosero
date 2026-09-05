@@ -21,12 +21,13 @@ import {
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import { BLACK, WHITE, createInitialBoard, oppositeColor } from '../logic/board.js';
+import { BLACK, WHITE, createInitialBoard, oppositeColor, colorKey } from '../logic/board.js';
 import { getNextTurn, getWinner } from '../logic/game-state.js';
 import { isValidMove, applyMove } from '../logic/flip-rule.js';
 import { deserializeBoard, serializeBoard } from './board-serialization.js';
 import { ensureSignedIn, getFirestoreInstance } from './firebase-init.js';
 import { generateRoomCode, normalizeRoomCode } from './room-code.js';
+import { createInitialTimeBank, computeNextTimeBank } from './game-timer.js';
 
 const ROOMS_COLLECTION = 'rooms';
 
@@ -67,6 +68,12 @@ const toRoomState = (roomId, data) => ({
   // ランダムマッチング（レート戦）由来の部屋のみtrue。ルームコード制の部屋には
   // フィールド自体が無いため、ここで`?? false`にして呼び出し側の分岐を単純にする。
   ranked: data.ranked ?? false,
+  // 一手タイマー・持ち時間（[online-match-timer](../../.claude/skills/online-match-timer/SKILL.md)参照）。
+  // 対局開始前（ルームコード制で相手がまだいない）はどちらも無い状態がありうる。
+  timeBank: data.timeBank ?? null,
+  // Firestoreの`Timestamp`をそのままアプリ状態に持ち回さず、ここでミリ秒に変換する
+  // （`Date.now()`との差分計算がそのまま使えるようにするため）。
+  turnStartedAtMs: data.turnStartedAt ? data.turnStartedAt.toMillis() : null,
 });
 
 /**
@@ -86,6 +93,10 @@ export const createRoom = async (boardSize) => {
     status: 'waiting',
     winner: null,
     lastMove: null,
+    timeBank: createInitialTimeBank(),
+    // 相手がまだいないため、対局が実際に始まる`joinRoom`の時点まで一手タイマーを
+    // 動かし始めない（[online-match-timer](../../.claude/skills/online-match-timer/SKILL.md)参照）。
+    turnStartedAt: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -111,6 +122,8 @@ export const joinRoom = async (rawRoomId) => {
   await updateDoc(roomRef(roomId), {
     'players.white': uid,
     status: 'in_progress',
+    // ここで対局が実際に始まるため、一手タイマーの起点をセットする。
+    turnStartedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 
@@ -128,10 +141,13 @@ export const joinRoom = async (rawRoomId) => {
  * @param {number} params.x
  * @param {number} params.y
  * @param {number} params.z
+ * @param {{ black: number, white: number }} params.timeBank - 手番開始時点の持ち時間
+ *   （購読で得た最新状態を渡すこと。[online-match-timer](../../.claude/skills/online-match-timer/SKILL.md)参照）
+ * @param {number} params.elapsedMs - 手番が始まってから着手までにかかった時間（ミリ秒）
  * @returns {Promise<void>}
  * @throws {Error} 合法手でない場合（送信前にローカルで弾く。SKILL.mdの信頼境界の節を参照）
  */
-export const submitMove = async ({ roomId, board, boardSize, color, x, y, z }) => {
+export const submitMove = async ({ roomId, board, boardSize, color, x, y, z, timeBank, elapsedMs }) => {
   if (!isValidMove(board, x, y, z, color, boardSize)) {
     throw new Error(`illegal move: (${x}, ${y}, ${z})`);
   }
@@ -140,12 +156,18 @@ export const submitMove = async ({ roomId, board, boardSize, color, x, y, z }) =
   const nextTurnColor = getNextTurn(nextBoard, color, boardSize);
   const isOver = nextTurnColor === null;
 
+  const myKey = colorKey(color);
+  const nextTimeBank = { ...timeBank, [myKey]: computeNextTimeBank(timeBank[myKey], elapsedMs) };
+
   await updateDoc(roomRef(roomId), {
     board: serializeBoard(nextBoard),
     currentTurn: isOver ? color : nextTurnColor,
     status: isOver ? 'finished' : 'in_progress',
     winner: isOver ? getWinner(nextBoard) : null,
     lastMove: { x, y, z, color },
+    timeBank: nextTimeBank,
+    // 対局が続く場合は次の手番の一手タイマーの起点、終わった場合はもう不要なのでnull。
+    turnStartedAt: isOver ? null : serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 };
@@ -161,6 +183,25 @@ export const getRoomSummary = async (roomId) => {
   const snapshot = await getDoc(roomRef(roomId));
   if (!snapshot.exists()) return null;
   return { players: snapshot.data().players };
+};
+
+/**
+ * ランダムマッチングで成立した部屋の一手タイマーを実際に起動する。対戦カード画面
+ * （vs-screen）を両者が見終えて対局画面に入る瞬間に呼ぶ想定
+ * （[online-match-timer](../../.claude/skills/online-match-timer/SKILL.md)参照。
+ * ルームコード制の部屋は`joinRoom`が対局開始と同時にセットするため、この関数は不要）。
+ * まだセットされていない場合のみ一方向に遷移する。両クライアントがほぼ同時に
+ * 呼んでも、先に届いた方だけが反映され、後続はルール上拒否される
+ * （`submitTimeoutLoss`と同じ早い者勝ちのレース処理）。
+ * @param {string} roomId - ルームコード
+ * @returns {Promise<void>}
+ */
+export const startGameClock = async (roomId) => {
+  try {
+    await updateDoc(roomRef(roomId), { turnStartedAt: serverTimestamp() });
+  } catch {
+    // 相手クライアントが既に起動済みの場合、ルール上拒否される。無視してよい。
+  }
 };
 
 /**
@@ -191,4 +232,31 @@ export const forfeitRoom = async ({ roomId, myColor }) => {
     winner: oppositeColor(myColor),
     updatedAt: serverTimestamp(),
   });
+};
+
+/**
+ * 一手タイマー・持ち時間の時間切れによる無条件敗北を報告する
+ * （[online-match-timer](../../.claude/skills/online-match-timer/SKILL.md)参照）。
+ * 両クライアントがそれぞれローカルでタイムアウトを検知するため、参加者のどちらから
+ * でも呼べる（自分自身のタイムアウトを自分で報告する場合も、相手のタイムアウトに
+ * 気づいて報告する場合もある）。両者がほぼ同時に検知しても、先に届いた書き込みで
+ * 部屋が`finished`になった時点で後続の書き込みはFirestoreルールにより自然に拒否
+ * される。これは正常系（早い者勝ち）であり、エラーとして扱わない。
+ * @param {object} params
+ * @param {string} params.roomId - ルームコード
+ * @param {number} params.timedOutColor - 時間切れになった側の色（この色が敗北になる）
+ * @returns {Promise<void>}
+ */
+export const submitTimeoutLoss = async ({ roomId, timedOutColor }) => {
+  try {
+    await updateDoc(roomRef(roomId), {
+      status: 'finished',
+      winner: oppositeColor(timedOutColor),
+      updatedAt: serverTimestamp(),
+    });
+  } catch {
+    // 相手クライアントが同じタイムアウトを先に検知して書き込み済みの場合、この更新は
+    // ルール上拒否される（部屋が既にfinished）。早い者勝ちで結果は変わらないため
+    // 無視してよい。
+  }
 };

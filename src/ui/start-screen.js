@@ -12,7 +12,7 @@ import {
 import { cancelRandomMatch, requestRandomMatch, subscribeToTicket } from '../net/matchmaking.js';
 import { ROOM_CODE_LENGTH, isValidRoomCode } from '../net/room-code.js';
 import { createPlayerProfile, getMyPlayerProfile, getPlayerProfile } from '../net/player-profile.js';
-import { getRoomSummary } from '../net/room-sync.js';
+import { getRoomSummary, startGameClock } from '../net/room-sync.js';
 import { MAX_NAME_LENGTH, getTier } from '../net/rating.js';
 import { fetchLeaderboard } from '../net/leaderboard.js';
 import { createTierIcon } from './tier-icon.js';
@@ -303,7 +303,12 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
       createVsScreen(container, {
         black,
         white,
-        onStart: () => finishSelection({ online: { roomId, color } }),
+        onStart: () => {
+          // 対戦カード画面を見終えた瞬間に一手タイマーを起動する（マッチ成立時点
+          // ではまだ起動しない理由は`startGameClock`のJSDoc参照）。
+          startGameClock(roomId);
+          finishSelection({ online: { roomId, color } });
+        },
       });
     } catch (error) {
       console.error('対戦相手情報の取得に失敗しました', error);
@@ -491,6 +496,43 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     }
   };
 
+  const showRulesStep = () => {
+    subtitle.textContent = '';
+    backButton.hidden = false;
+    backButton.textContent = '← モード選択に戻る';
+    currentStep = 'rules';
+    clearError();
+    clearButtons();
+
+    const content = document.createElement('div');
+    content.className = 'start-screen-rules-content';
+
+    const addSection = (heading, paragraphs) => {
+      const h2 = document.createElement('h2');
+      h2.textContent = heading;
+      content.appendChild(h2);
+      for (const text of paragraphs) {
+        const p = document.createElement('p');
+        p.textContent = text;
+        content.appendChild(p);
+      }
+    };
+
+    addSection('盤面と反転ルール', [
+      '縦・横・奥行きの3方向に石を積み重ねた立体盤面です。石を置いた位置から26方向（同一平面上の8方向・真上/真下・立体的な斜め17方向）を走査し、相手の石が連続したあと自分の石で終端していれば、その区間をすべて自分の色に反転します。上下方向やナナメ方向も、通常の2Dオセロと同じように挟んで反転できます。',
+      '置ける場所がなければパス。両者ともパスした場合はゲーム終了となり、石の数が多い方の勝ちです。',
+    ]);
+
+    addSection('一手タイマー・持ち時間（オンライン対戦のみ）', [
+      '自分の手番になってから30秒以内に着手しなければなりません。30秒を過ぎると、その時点で無条件に負けとなります。',
+      '持ち時間は対局開始時、お互い5分です。手番中はリアルタイムで減っていきますが、一手を30秒以内に打てた場合は、余った時間（30秒 − 実際にかかった時間）が持ち時間に加算されます。早く打つほど持ち時間は増え、ギリギリまで使うと持ち時間は正味減っていきます。',
+      '持ち時間が0になった場合も、一手タイマーの残りに関係なくその時点で無条件に負けとなります。',
+      'この時間制限はオンライン対戦（ルームコード制・ランダムマッチングとも）にのみ適用され、CPU対戦・2人対戦（同一端末）には適用されません。',
+    ]);
+
+    buttonRow.appendChild(content);
+  };
+
   const showBattleModeStep = () => {
     subtitle.textContent = '対戦モードを選んでください';
     backButton.hidden = true;
@@ -528,6 +570,15 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
       showProfileStep();
     });
     buttonRow.appendChild(profileButton);
+
+    const rulesButton = document.createElement('button');
+    rulesButton.type = 'button';
+    rulesButton.textContent = '遊び方';
+    rulesButton.addEventListener('click', () => {
+      playClickSound();
+      showRulesStep();
+    });
+    buttonRow.appendChild(rulesButton);
   };
 
   backButton.addEventListener('click', () => {

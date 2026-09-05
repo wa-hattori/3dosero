@@ -5,6 +5,9 @@ import { playClickSound } from '../audio/click-sound.js';
 
 const COLOR_LABELS = { [BLACK]: '先手（黒）', [WHITE]: '後手（白）' };
 
+/** この時間が経つと「対局開始」ボタンを押さなくても自動的に対局が始まる。 */
+const AUTO_START_DELAY_MS = 5_000;
+
 /**
  * 対戦者1名分の行（色ラベル・階級アイコン付きの名前・スコア）を組み立てる。
  * @param {number} color - `BLACK`/`WHITE`
@@ -70,19 +73,47 @@ export const createVsScreen = (container, { black, white, onStart }) => {
 
   overlay.appendChild(buildPlayerRow(WHITE, white));
 
+  const countdownLine = document.createElement('p');
+  countdownLine.className = 'vs-screen-countdown';
+  overlay.appendChild(countdownLine);
+
   const button = document.createElement('button');
   button.type = 'button';
   button.textContent = '対局開始';
   button.addEventListener('click', () => {
     playClickSound();
-    dispose();
-    onStart();
+    start();
   });
   overlay.appendChild(button);
 
   container.appendChild(overlay);
 
+  const start = () => {
+    clearInterval(intervalId);
+    dispose();
+    onStart();
+  };
+
+  // ボタンを押さなくても、一定時間で自動的に対局を開始する
+  // （[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)参照）。
+  // 待ちたくない場合は引き続きボタンで即座に開始できる。
+  let remainingSeconds = Math.ceil(AUTO_START_DELAY_MS / 1000);
+  const renderCountdown = () => {
+    countdownLine.textContent = `${remainingSeconds}秒後に自動的に対局が始まります`;
+  };
+  renderCountdown();
+
+  const intervalId = setInterval(() => {
+    remainingSeconds -= 1;
+    if (remainingSeconds <= 0) {
+      start();
+      return;
+    }
+    renderCountdown();
+  }, 1000);
+
   const dispose = () => {
+    clearInterval(intervalId);
     overlay.remove();
   };
 

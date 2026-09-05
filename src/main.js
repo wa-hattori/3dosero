@@ -4,7 +4,7 @@ import { getNextTurn, getWinner, countStones } from './logic/game-state.js';
 import { chooseRandomMove, RANDOM_CPU_LEVEL } from './logic/cpu.js';
 import { loadModelSession } from './ai/model-loader.js';
 import { chooseGanMove } from './ai/gan-cpu.js';
-import { submitMove, subscribeToRoom, forfeitRoom } from './net/room-sync.js';
+import { submitMove, subscribeToRoom, forfeitRoom, submitTimeoutLoss } from './net/room-sync.js';
 import { settleRankedResult } from './net/rating-settlement.js';
 import { MATCH_RESULT } from './net/rating.js';
 import { notifyGameEnded } from './ads/interstitial-ads.js';
@@ -19,10 +19,12 @@ import { createLayerControl } from './ui/layer-control.js';
 import { createStartScreen } from './ui/start-screen.js';
 import { createEndScreen } from './ui/end-screen.js';
 import { createScoreChangeScreen } from './ui/score-change-screen.js';
+import { createGameTimerView } from './ui/game-timer-view.js';
 import { createHeroScene } from './render/hero-scene.js';
 import { createStarfield } from './render/starfield-view.js';
 import { createBgmPlayer } from './audio/bgm-player.js';
 import { setClickSoundMuted } from './audio/click-sound.js';
+import { setCountdownBeepMuted } from './audio/countdown-beep.js';
 import { createMuteToggle } from './ui/mute-toggle.js';
 import { createTitleButton } from './ui/title-button.js';
 import { createVersionBadge } from './ui/version-badge.js';
@@ -74,6 +76,7 @@ const bgmPlayer = createBgmPlayer();
 createMuteToggle(uiOverlay, (muted) => {
   bgmPlayer.setMuted(muted);
   setClickSoundMuted(muted);
+  setCountdownBeepMuted(muted);
 });
 createVersionBadge(uiOverlay);
 
@@ -116,12 +119,27 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
   let isOver = false;
   let winner = null;
   let activeLayer = null;
+  // オンライン対戦の一手タイマー・持ち時間（購読で得た最新状態のミラー。
+  // `submitOnlineMove`が着手送信時の経過時間計算に使う。
+  // [online-match-timer](../.claude/skills/online-match-timer/SKILL.md)参照）。
+  let timeBank = null;
+  let turnStartedAtMs = null;
 
   /** オンライン対戦での自分の色。オンライン対戦以外では`null`。 */
   const myOnlineColor = battleMode === 'online' ? online.color : null;
   /** CPU対戦モードでCPUが受け持つ色。スタート画面で選んだ人間の色の逆。 */
   const cpuColor =
     battleMode === 'cpu' ? oppositeColor(humanColor ?? DEFAULT_HUMAN_COLOR) : null;
+
+  // 一手タイマー・持ち時間はオンライン対戦のみ対象（CPU対戦・2人対戦〈同一端末〉には
+  // 適用しない）。タイムアウトはどちらのクライアントが先に検知してもよい
+  // （`submitTimeoutLoss`側で早い者勝ちのレースとして処理される）。
+  const gameTimerView =
+    battleMode === 'online'
+      ? createGameTimerView(uiOverlay, (timedOutColor) => {
+          submitTimeoutLoss({ roomId: online.roomId, timedOutColor });
+        })
+      : null;
 
   const isCpuTurn = () => battleMode === 'cpu' && currentTurn === cpuColor;
   const isWaitingForOpponentOnline = () =>
@@ -162,6 +180,9 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
       isOver = room.status === 'finished';
       winner = isOver ? room.winner : null;
       validMoves = isOver ? [] : getValidMoves(board, currentTurn, boardSize);
+      timeBank = room.timeBank;
+      turnStartedAtMs = room.turnStartedAtMs;
+      gameTimerView.update(room);
 
       render();
 
@@ -174,6 +195,7 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
           // 対局画面の「← タイトルに戻る」ボタンは、終了画面が覆っている間はもう
           // 押させたくない（見た目上は隠れていても、キーボード操作等では届いてしまう）。
           titleButton.dispose();
+          gameTimerView.dispose();
           const endScreen = createEndScreen(uiOverlay, {
             winner,
             counts: countStones(board),
@@ -266,7 +288,17 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
    */
   const submitOnlineMove = async ([x, y, z]) => {
     try {
-      await submitMove({ roomId: online.roomId, board, boardSize, color: myOnlineColor, x, y, z });
+      await submitMove({
+        roomId: online.roomId,
+        board,
+        boardSize,
+        color: myOnlineColor,
+        x,
+        y,
+        z,
+        timeBank,
+        elapsedMs: turnStartedAtMs === null ? 0 : Date.now() - turnStartedAtMs,
+      });
     } catch (error) {
       console.error('着手の送信に失敗しました', error);
     }

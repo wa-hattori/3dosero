@@ -19,6 +19,14 @@ export const WHITE = 2;
 export const oppositeColor = (color) => (color === BLACK ? WHITE : BLACK);
 
 /**
+ * 色を、Firestoreのマップ型フィールド（`ratingSnapshot`/`settled`/`timeBank`等、
+ * 黒番・白番それぞれの値を持つオブジェクト）のキー名に変換する。
+ * @param {number} color - `BLACK` または `WHITE`
+ * @returns {'black' | 'white'}
+ */
+export const colorKey = (color) => (color === BLACK ? 'black' : 'white');
+
+/**
  * 3D coordinates を盤面配列（`Int8Array`、長さ `boardSize ** 3`）上のフラットな
  * インデックスに変換する。
  * @param {number} x - x座標（0〜boardSize-1）
