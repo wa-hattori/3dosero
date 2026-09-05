@@ -14,6 +14,7 @@ import { ROOM_CODE_LENGTH, isValidRoomCode } from '../net/room-code.js';
 import { createPlayerProfile, getMyPlayerProfile } from '../net/player-profile.js';
 import { MAX_NAME_LENGTH, getTier } from '../net/rating.js';
 import { fetchLeaderboard } from '../net/leaderboard.js';
+import { createTierIcon } from './tier-icon.js';
 
 const BATTLE_MODES = [
   { id: 'cpu', label: 'CPU対戦' },
@@ -427,6 +428,46 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     }
   };
 
+  const showProfileStep = async () => {
+    subtitle.textContent = 'プロフィールを読み込んでいます…';
+    backButton.hidden = false;
+    backButton.textContent = '← モード選択に戻る';
+    currentStep = 'profile';
+    clearError();
+    clearButtons();
+
+    try {
+      const profile = await getMyPlayerProfile();
+      if (currentStep !== 'profile') return; // 読み込み中に他の画面へ移動していたら何もしない
+
+      if (!profile) {
+        subtitle.textContent =
+          'まだプレイヤーネームが設定されていません（ランダムマッチングで設定できます）';
+        return;
+      }
+
+      subtitle.textContent = '';
+
+      const nameLine = document.createElement('p');
+      nameLine.className = 'start-screen-profile-name';
+      nameLine.appendChild(createTierIcon(profile.score));
+      const nameText = document.createElement('span');
+      nameText.textContent = profile.name;
+      nameLine.appendChild(nameText);
+      buttonRow.appendChild(nameLine);
+
+      const scoreLine = document.createElement('p');
+      scoreLine.className = 'start-screen-profile-score';
+      scoreLine.textContent = `スコア ${profile.score}（${getTier(profile.score)}）　${profile.gamesPlayed}戦`;
+      buttonRow.appendChild(scoreLine);
+    } catch (error) {
+      console.error('プロフィールの取得に失敗しました', error);
+      if (currentStep === 'profile') {
+        subtitle.textContent = 'プロフィールの取得に失敗しました。もう一度お試しください。';
+      }
+    }
+  };
+
   const showBattleModeStep = () => {
     subtitle.textContent = '対戦モードを選んでください';
     backButton.hidden = true;
@@ -455,6 +496,15 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
       showRankingStep();
     });
     buttonRow.appendChild(rankingButton);
+
+    const profileButton = document.createElement('button');
+    profileButton.type = 'button';
+    profileButton.textContent = 'プロフィール';
+    profileButton.addEventListener('click', () => {
+      playClickSound();
+      showProfileStep();
+    });
+    buttonRow.appendChild(profileButton);
   };
 
   backButton.addEventListener('click', () => {
