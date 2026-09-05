@@ -96,7 +96,7 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
   const stoneView = createStoneView(sceneManager.scene, boardSize);
   const highlightView = createHighlightView(sceneManager.scene, boardSize);
   const statusPanel = createStatusPanel(uiOverlay);
-  createTitleButton(uiOverlay, {
+  const titleButton = createTitleButton(uiOverlay, {
     // オンライン対戦中に「タイトルに戻る」で離脱した場合、離脱した側を無条件で
     // 敗北・相手を無条件で勝利として通知する（相手がずっと待機状態のままに
     // ならないようにするため）。既に対局が終わっている場合は何もしない。
@@ -171,6 +171,9 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
         const showResultScreens = (settlement) => {
           if (resultScreensShown) return;
           resultScreensShown = true;
+          // 対局画面の「← タイトルに戻る」ボタンは、終了画面が覆っている間はもう
+          // 押させたくない（見た目上は隠れていても、キーボード操作等では届いてしまう）。
+          titleButton.dispose();
           const endScreen = createEndScreen(uiOverlay, {
             winner,
             counts: countStones(board),
@@ -247,6 +250,7 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
 
     if (isOver) {
       notifyGameEnded();
+      titleButton.dispose();
       createEndScreen(uiOverlay, { winner, counts: countStones(board) });
       return;
     }
