@@ -121,6 +121,8 @@ function isTimingOut(before, after):
 - `src/net/matchmaking.js` — `tryClaimCandidate`が部屋作成時に`timeBank`/`turnStartedAt`を初期化する。
 - `src/ui/game-timer-view.js` — 時計の描画・ローカルでのtick・タイムアウト検知（`onTimeout`コールバック経由で`submitTimeoutLoss`を呼ぶのは呼び出し側`src/main.js`の責務）。
 - `src/audio/countdown-beep.js` — カウントダウン音の再生。
+- `src/ui/vs-screen.js` — ランダムマッチングの対戦カード画面。「対局開始」ボタンを押さなくても5秒（`AUTO_START_DELAY_MS`）で自動的に対局が始まる。
+- `src/ui/start-screen.js`の`showRulesStep` — 3Dオセロの反転ルール・このタイマー機能の説明画面（モード選択画面から「遊び方」ボタンで開く）。
 
 ## 参照
 
