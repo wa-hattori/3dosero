@@ -11,10 +11,12 @@ import {
 } from '../net/room-sync.js';
 import { cancelRandomMatch, requestRandomMatch, subscribeToTicket } from '../net/matchmaking.js';
 import { ROOM_CODE_LENGTH, isValidRoomCode } from '../net/room-code.js';
-import { createPlayerProfile, getMyPlayerProfile } from '../net/player-profile.js';
+import { createPlayerProfile, getMyPlayerProfile, getPlayerProfile } from '../net/player-profile.js';
+import { getRoomSummary } from '../net/room-sync.js';
 import { MAX_NAME_LENGTH, getTier } from '../net/rating.js';
 import { fetchLeaderboard } from '../net/leaderboard.js';
 import { createTierIcon } from './tier-icon.js';
+import { createVsScreen } from './vs-screen.js';
 
 const BATTLE_MODES = [
   { id: 'cpu', label: 'CPU対戦' },
@@ -286,6 +288,29 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     buttonRow.appendChild(submitButton);
   };
 
+  /**
+   * ランダムマッチング成立後、対局開始前に対戦カード画面（vs-screen）を挟む。
+   * 対戦相手情報の取得に失敗しても対局自体は進められるようにする（フェイルソフト）。
+   * @param {{ roomId: string, color: number }} match - 成立した部屋と自分の色
+   */
+  const proceedToRankedMatch = async ({ roomId, color }) => {
+    try {
+      const summary = await getRoomSummary(roomId);
+      const [black, white] = await Promise.all([
+        summary?.players?.black ? getPlayerProfile(summary.players.black) : null,
+        summary?.players?.white ? getPlayerProfile(summary.players.white) : null,
+      ]);
+      createVsScreen(container, {
+        black,
+        white,
+        onStart: () => finishSelection({ online: { roomId, color } }),
+      });
+    } catch (error) {
+      console.error('対戦相手情報の取得に失敗しました', error);
+      finishSelection({ online: { roomId, color } });
+    }
+  };
+
   const startRandomMatch = async () => {
     clearError();
     // レート戦（ランダムマッチング）にはプレイヤーネームが必須。未設定なら先に設定させる
@@ -303,7 +328,7 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
       const { ticketId, roomId } = await requestRandomMatch(selectedBoardSize);
       if (roomId) {
         // 自分が既存の待機チケットを見つけてマッチさせた側 = 白番。
-        finishSelection({ online: { roomId, color: WHITE } });
+        proceedToRankedMatch({ roomId, color: WHITE });
         return;
       }
       activeTicketId = ticketId;
@@ -313,7 +338,7 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
         // キャンセル対象のチケットではないため、dispose時の誤キャンセルを防ぐ。
         activeTicketId = null;
         stopActiveSubscription();
-        finishSelection({ online: { roomId: ticket.roomId, color: BLACK } });
+        proceedToRankedMatch({ roomId: ticket.roomId, color: BLACK });
       });
     } catch (error) {
       console.error('ランダムマッチングに失敗しました', error);

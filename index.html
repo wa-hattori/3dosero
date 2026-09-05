@@ -237,6 +237,74 @@
       opacity: 1;
     }
 
+    .vs-screen {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(17, 19, 24, 0.9);
+      text-align: center;
+    }
+
+    .vs-screen h1 {
+      margin: 0 0 4px;
+      font-size: 2rem;
+      letter-spacing: 0.05em;
+    }
+
+    .vs-screen-row {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .vs-screen-color-label {
+      margin: 0;
+      opacity: 0.75;
+      font-size: 0.9rem;
+    }
+
+    .vs-screen-name-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      font-size: 1.3rem;
+    }
+
+    .vs-screen-score-line {
+      margin: 0;
+      opacity: 0.85;
+      font-size: 1rem;
+    }
+
+    .vs-screen-vs-mark {
+      margin: 2px 0;
+      font-size: 1.4rem;
+      font-weight: 700;
+      opacity: 0.6;
+    }
+
+    .vs-screen button {
+      margin-top: 16px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.08);
+      color: inherit;
+      font-size: 1.1rem;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .vs-screen button:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+
     .end-screen {
       position: absolute;
       inset: 0;

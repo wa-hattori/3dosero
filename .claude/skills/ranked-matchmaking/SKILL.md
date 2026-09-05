@@ -108,6 +108,10 @@ rooms/{roomId}                  # ランダムマッチング由来の部屋の�
 
 部屋作成時に、両者の現在の`score`を`ratingSnapshot`として書き込み、`ranked: true`・`settled: {black: false, white: false}`を設定する。
 
+### マッチ成立時（対局開始前の対戦カード画面）
+
+ランダムマッチングが成立した直後、実際の対局画面に入る前に`src/ui/vs-screen.js`の`createVsScreen`で対戦カード画面を挟む。先手（黒）を上、後手（白）を下に、それぞれ階級アイコン付きの名前とスコアを表示する。対戦相手のプロフィール取得（`getRoomSummary`→`getPlayerProfile`）に失敗した場合もフェイルソフトで対局自体は開始できるようにする（対戦カードの表示は対局そのものの前提条件ではない）。ルームコード制の対局（`create`/`join`）はこの画面を挟まない（対象はランダムマッチングのみ）。
+
 ### 対局終了時（`submitMove`の終局・`forfeitRoom`共通）
 
 対局終了を検知した各クライアントが、**自分の分だけ**を`writeBatch`で以下の2件同時に書き込む。
@@ -144,10 +148,14 @@ function settleRankedResult(roomId, myColor, myResult):
 
 ## モジュール構成
 
-- `src/net/rating.js` — Elo計算・階級判定の純粋関数（`calculateEloDelta`/`getTier`/`DEFAULT_SCORE`等の定数）。**Firebase依存なし**、Node標準テストで検証する。
-- `src/net/player-profile.js` — `players/{uid}`の作成・名前更新・取得。Firestoreへの実際の読み書き（自動テスト対象外）。
-- `src/net/rating-settlement.js` — 対局終了時のスコア精算（`writeBatch`）。Firestoreへの実際の読み書き（自動テスト対象外）。
-- `src/ui/`にプレイヤーネーム入力ステップ・ランキング画面を追加する。
+- `src/net/rating.js` — Elo計算・階級判定の純粋関数（`calculateEloDelta`/`getTier`/`getTierInfo`/`DEFAULT_SCORE`等の定数）。**Firebase依存なし**、Node標準テストで検証する。
+- `src/net/player-profile.js` — `players/{uid}`の作成・名前更新・取得（`getMyPlayerProfile`は自分、`getPlayerProfile(uid)`は任意のプレイヤー。対戦相手表示に使う）。Firestoreへの実際の読み書き（自動テスト対象外）。
+- `src/net/rating-settlement.js` — 対局終了時のスコア精算（`writeBatch`）。精算結果（`beforeScore`/`afterScore`/`delta`）を呼び出し側に返し、スコア変動画面の描画に使う。Firestoreへの実際の読み書き（自動テスト対象外）。
+- `src/net/room-sync.js` の `getRoomSummary(roomId)` — 対戦カード画面用の軽量な部屋情報の一度読み取り。
+- `src/ui/tier-icon.js` — 階級アイコン（コイン型、CSSグラデーションのみ）のDOM要素生成。
+- `src/ui/vs-screen.js` — マッチ成立時の対戦カード画面。
+- `src/ui/score-change-screen.js` — 対局終了後のスコア変動可視化画面。
+- `src/ui/start-screen.js` — プレイヤーネーム入力ステップ・ランキング画面・プロフィール画面を追加する。
 
 ## 参照
 
