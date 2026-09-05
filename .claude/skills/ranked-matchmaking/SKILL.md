@@ -47,20 +47,39 @@ function calculateEloDelta(myScore, opponentScore, result):
 
 標準的なEloレーティング（チェス等で使われるもの）をそのまま採用し、独自のアレンジはしない。「格上に勝つと増分が大きい／格下に負けると減少が大きい」という要望は、この標準Elo式が自然に満たす性質そのものである。
 
-## 階級（5段階）
+## 階級（6段階・素材モチーフ）
 
-スコアから導出する。Firestoreには保存せず、常に`score`から計算する（保存された`tier`と`score`が食い違うおそれをなくすため）。
+スコアから導出する。Firestoreには保存せず、常に`score`から計算する（保存された`tier`と`score`が食い違うおそれをなくすため）。素材が硬く・希少になっていくイメージで並べ、各階級には元素記号を持たせる（[階級アイコン](#階級アイコンtier-icon)節参照）。
 
 ```
+function getTierInfo(score):
+  if score < 1600: return { id: 'iron',            label: 'アイアン',           symbol: 'Fe' }  # DEFAULT_SCORE(1500)はここ
+  if score < 1700: return { id: 'aluminum',         label: 'アルミ',             symbol: 'Al' }
+  if score < 1800: return { id: 'bronze',           label: 'ブロンズ',           symbol: 'Cu' }  # 合金なので構成元素の銅(Cu)を使う
+  if score < 2000: return { id: 'silver',           label: 'シルバー',           symbol: 'Ag' }
+  if score < 3000: return { id: 'diamond',          label: 'ダイヤ',             symbol: 'C'  }  # ダイヤモンドは炭素(C)の同素体
+  else:            return { id: 'carbon-nanotube',  label: 'カーボンナノチューブ', symbol: 'C'  }  # これも炭素(C)の同素体
+
 function getTier(score):
-  if score < 1300: return 'ブロンズ'
-  if score < 1500: return 'シルバー'
-  if score < 1700: return 'ゴールド'      # DEFAULT_SCORE(1500)はここに入るため、初期階級はゴールド
-  if score < 1900: return 'プラチナ'
-  return 'ダイヤモンド'
+  return getTierInfo(score).label
 ```
 
-閾値は初期値であり、実際のスコア分布を見て調整してよい（`src/net/rating.js`の定数を変更するだけで済むようにする）。
+閾値は初期値であり、実際のスコア分布を見て調整してよい（`src/net/rating.js`の定数を変更するだけで済むようにする）。`id`はCSSクラス名・アイコンのバリアント指定に使う安定した識別子（日本語の表示名をCSSクラス名にそのまま使うと事故りやすいため分離してある）。
+
+### 階級アイコン（tier-icon）
+
+コイン型（円形、ベゼル風の内側シャドウ）で中央に元素記号を書いた`<span>`を`src/ui/tier-icon.js`の`createTierIcon(score)`で生成する。ビルドツール・画像アセットを増やさないため、SVGや外部画像ではなく純粋にCSSグラデーションで着色する（`index.html`の`.tier-icon--<id>`）。
+
+| 階級 | 色 |
+|---|---|
+| アイアン(Fe) | 白（やや温かみのあるオフホワイト） |
+| アルミ(Al) | 白（やや冷たみのある明るい白） |
+| ブロンズ(Cu) | 銅色 |
+| シルバー(Ag) | 銀色 |
+| ダイヤ(C) | ターコイズブルー |
+| カーボンナノチューブ(C) | 虹色（conic-gradientで全周を回す） |
+
+`getTier`と違い、アイコン描画には`id`/`symbol`が必要なため、表示系のコードは`getTierInfo(score)`を使う（`getTier`は表示名だけが要る文脈向けの簡易版）。
 
 ## データモデル（Firestore、追加分）
 
