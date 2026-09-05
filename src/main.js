@@ -5,6 +5,8 @@ import { chooseRandomMove, RANDOM_CPU_LEVEL } from './logic/cpu.js';
 import { loadModelSession } from './ai/model-loader.js';
 import { chooseGanMove } from './ai/gan-cpu.js';
 import { submitMove, subscribeToRoom, forfeitRoom } from './net/room-sync.js';
+import { settleRankedResult } from './net/rating-settlement.js';
+import { MATCH_RESULT } from './net/rating.js';
 import { notifyGameEnded } from './ads/interstitial-ads.js';
 import { createSceneManager } from './render/scene-manager.js';
 import { createCameraControls } from './render/camera-controls.js';
@@ -140,6 +142,11 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
 
   render();
 
+  // レート戦（ランダムマッチングのみ）の精算は1局につき1回でよい。この購読は
+  // 自分の精算の書き込み（settled.<自分の色>の更新）自体でも再度発火するため、
+  // フラグで二重の精算試行（実害はないが無駄な読み取りが発生する）を防ぐ。
+  let rankedResultSettled = false;
+
   if (battleMode === 'online') {
     // オンライン対戦では盤面の実体をFirestore側に置き、この購読が状態更新の
     // 唯一の経路になる（自分の着手の反映も、相手の着手の反映も同じ経路を通る）。
@@ -155,6 +162,21 @@ const startGame = ({ battleMode, boardSize, cpuLevel, online, humanColor }) => {
       if (isOver) {
         notifyGameEnded();
         createEndScreen(uiOverlay, { winner, counts: countStones(board) });
+
+        if (!rankedResultSettled) {
+          rankedResultSettled = true;
+          const myResult =
+            winner === null
+              ? MATCH_RESULT.DRAW
+              : winner === myOnlineColor
+                ? MATCH_RESULT.WIN
+                : MATCH_RESULT.LOSS;
+          settleRankedResult({ roomId: online.roomId, myColor: myOnlineColor, myResult }).catch(
+            (error) => {
+              console.error('レート戦の結果精算に失敗しました', error);
+            },
+          );
+        }
       }
     });
   }
