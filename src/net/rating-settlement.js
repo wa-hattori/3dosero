@@ -6,9 +6,13 @@
  * Elo計算そのものは`src/net/rating.js`の純粋関数を使い、ここでは再実装しない。
  */
 
-import { doc, getDoc, increment, writeBatch } from 'firebase/firestore';
-import { colorKey } from '../logic/board.js';
-import { calculateEloDelta } from './rating.js';
+import { doc, getDoc, increment, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
+import { BLACK, WHITE, colorKey } from '../logic/board.js';
+import { calculateEloDelta, MATCH_RESULT } from './rating.js';
+import { getFallbackCpuNotionalRating } from './matchmaking-cpu-fallback.js';
+import { getMyPlayerProfile } from './player-profile.js';
+import { serializeBoard } from './board-serialization.js';
+import { generateRoomCode } from './room-code.js';
 import { ensureSignedIn, getFirestoreInstance } from './firebase-init.js';
 
 const ROOMS_COLLECTION = 'rooms';
@@ -56,4 +60,47 @@ export const settleRankedResult = async ({ roomId, myColor, myResult }) => {
   await batch.commit();
 
   return { beforeScore, afterScore: beforeScore + delta, delta };
+};
+
+/**
+ * ランダムマッチングが一定時間成立せずCPU代替対戦になった場合（[online-multiplayer](../../.claude/skills/online-multiplayer/SKILL.md)の
+ * フォールバック）の結果を記録・精算する。実際の対局はローカルの`battleMode: 'cpu'`と
+ * 同じ経路で完結する（Firestoreとの同期は不要）ため、対局が終わった時点で
+ * 「既に終了した状態のレート戦の部屋」をFirestore上に直接作り、そのまま
+ * `settleRankedResult`を呼んで精算する（対人戦のレート戦と同じ精算コード・
+ * 同じFirestoreルールをそのまま再利用するため。自分は常に黒番として扱う。
+ * どちらの色でCPUと対局したかは無関係で、この部屋はあくまで精算用の記録）。
+ * @param {object} params
+ * @param {number} params.boardSize
+ * @param {Int8Array} params.board - 対局終了時点の盤面（記録用）
+ * @param {number} params.cpuLevel - 対戦したCPUレベル
+ * @param {number} params.myResult - `MATCH_RESULT`のいずれか
+ * @returns {Promise<{ beforeScore: number, afterScore: number, delta: number } | null>}
+ */
+export const settleRankedCpuMatch = async ({ boardSize, board, cpuLevel, myResult }) => {
+  const uid = await ensureSignedIn();
+  const db = getFirestoreInstance();
+  const profile = await getMyPlayerProfile();
+  const roomId = generateRoomCode();
+  const cpuNotionalRating = getFallbackCpuNotionalRating(cpuLevel);
+  const winner = myResult === MATCH_RESULT.WIN ? BLACK : myResult === MATCH_RESULT.LOSS ? WHITE : null;
+
+  await setDoc(doc(db, ROOMS_COLLECTION, roomId), {
+    boardSize,
+    board: serializeBoard(board),
+    players: { black: uid, white: null },
+    currentTurn: BLACK,
+    status: 'finished',
+    winner,
+    lastMove: null,
+    ranked: true,
+    vsCpu: true,
+    cpuLevel,
+    ratingSnapshot: { black: profile.score, white: cpuNotionalRating },
+    settled: { black: false, white: true },
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return settleRankedResult({ roomId, myColor: BLACK, myResult });
 };
