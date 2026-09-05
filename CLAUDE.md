@@ -11,7 +11,7 @@
 - **GUI**: 盤面は緑地に黒線のマス目、着手可能マスは灰色でハイライト。視点操作は全体回転・拡大縮小（VESTA的な3D結晶構造ビューアのイメージ）に加え、層ごとに絞り込んで見るオプションを持つ。
 - **配信**: まずはビルドツールなしの素の HTML/CSS/JS で実装し、HTTPS で静的サイトとして公開する。**App Store でのネイティブ配信は、Capacitor による iOS ラッピング（オフライン同梱・GitHub Actions macOS ランナーでのビルド/署名/TestFlight提出）で行う。詳細は [ios-native-packaging](.claude/skills/ios-native-packaging/SKILL.md) を正本とする。**
 - **CPU対戦相手**: 自己対戦強化学習（AlphaZero風。「GAN」は文字通りのGenerator/Discriminatorではなく自己対戦を指す）で学習したモデルを、ブラウザ内推論（`onnxruntime-web`、CDN経由・サーバー不要）で使う。レベル1は簡易なランダムCPU、レベル2〜5は学習済みチェックポイントを自己対戦Eloで評価して選定した4段階。学習アルゴリズムの正本は [gan-cpu-self-play](.claude/skills/gan-cpu-self-play/SKILL.md)。
-- **オンライン対戦**: Firebase Firestoreをクライアントから直接読み書きするサーバーレス構成（自前サーバーは書かない）。ルームコード制・ランダムマッチングの両方に対応し、匿名認証（アカウント登録不要）で参加者を識別する。まずWeb版のみ対応し、iOS版への反映は別途行う。正本は [online-multiplayer](.claude/skills/online-multiplayer/SKILL.md)。
+- **オンライン対戦**: Firebase Firestoreをクライアントから直接読み書きするサーバーレス構成（自前サーバーは書かない）。ルームコード制・ランダムマッチングの両方に対応し、匿名認証（アカウント登録不要）で参加者を識別する。まずWeb版のみ対応し、iOS版への反映は別途行う。正本は [online-multiplayer](.claude/skills/online-multiplayer/SKILL.md)。ランダムマッチングにはプレイヤーネーム・Eloライクなスコア・階級・ランキング表示を追加している（正本: [ranked-matchmaking](.claude/skills/ranked-matchmaking/SKILL.md)）。オンライン対戦（ルームコード制・ランダムマッチング共通）には一手30秒のタイマーと5分の持ち時間があり、時間切れは無条件負けになる（正本: [online-match-timer](.claude/skills/online-match-timer/SKILL.md)）。
 
 ## 現時点のアーキテクチャ方針
 
@@ -93,7 +93,7 @@ GANベースCPU対戦相手の学習コード（`training/` 配下）に適用�
 ## `.claude/` の使い分け
 
 - **rules/** — 常に従うべき指針。`common/` は言語非依存（Git運用・テスト方針）、`javascript/` はJS/Three.js固有の規約、`python/` はPython/学習コード固有の規約。作業前提として常に有効。
-- **skills/** — コマンドやエージェントから呼び出す再利用可能なワークフロー定義（TDDループ、アトミックコミット手順、3D反転ルールの正本、静的デプロイ手順、バージョンタグ運用手順、iOSネイティブ配信の正本、オンライン対戦の正本、iOS広告表示の正本）。
+- **skills/** — コマンドやエージェントから呼び出す再利用可能なワークフロー定義（TDDループ、アトミックコミット手順、3D反転ルールの正本、静的デプロイ手順、バージョンタグ運用手順、iOSネイティブ配信の正本、オンライン対戦の正本、レート戦（ランキング）の正本、オンライン対戦タイマーの正本、iOS広告表示の正本）。
 - **agents/** — 限定的な範囲を持つタスク専門のサブエージェント（ゲームロジックレビュー、Three.js実装、学習コード実装/レビュー、コミット作成）。
 - **commands/** — スラッシュコマンド（`/commit`, `/plan-step`）。エージェントやスキルを起動するショートカット。
 - **hooks/** — ツール実行時の自動チェック（コミットメッセージのAngular規約検証、`console.log`/`debugger`残留の警告）。`settings.json` で登録。
