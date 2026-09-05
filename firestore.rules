@@ -72,6 +72,10 @@ service cloud.firestore {
         && request.resource.data.status == 'matched'
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.boardSize == resource.data.boardSize;
+
+      // `cancelRandomMatch`（マッチ成立前に自分のチケットを取り消す）に必要。
+      // 削除できるのはチケットの作成者本人のみ。
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
     }
   }
 }
