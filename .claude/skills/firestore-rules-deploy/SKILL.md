@@ -52,7 +52,7 @@ git用のSSH Deploy Keyは「このリポジトリへのpush/pullのみ」に限
    ```
    `firestore.indexes.json`も変更した場合は`--only firestore:rules,firestore:indexes`とする。
 
-5. **反映を確認する。** コマンドの出力に`✔  Deploy complete!`が出ることを確認する。必要であれば[Firebaseコンソール](https://console.firebase.google.com/project/dosero/firestore/rules)のルールタブで反映後の内容を目視確認する。
+5. **反映を確認する。** コマンドの出力に`✔  Deploy complete!`が出ることを確認するだけでは不十分な場合がある。**【実際に踏んだ不具合】** `firebase deploy --only firestore:rules`が成功を報告したにもかかわらず、実際にはリリース（`cloud.firestore`エイリアスが指すルールセット）が更新されておらず、旧ルールのままだったことがあった（クライアント側のプロフィール作成が`PERMISSION_DENIED`で失敗し発覚。原因は特定できていない）。**新しいスキーマに依存する変更をデプロイした直後は、実際にそのスキーマでの読み書きが通ることを一度実機（またはこのスキルの「動作確認」相当の手動テスト）で確認するまで「反映済み」と見なさない。** 疑わしい場合は同じコマンドをもう一度実行する（べき等な操作であり、害はない）。[Firebaseコンソール](https://console.firebase.google.com/project/dosero/firestore/rules)のルールタブで反映後の内容を目視確認するのも有効。
 
 ## スキーマ変更を伴うルール変更の順序に関する注意
 
