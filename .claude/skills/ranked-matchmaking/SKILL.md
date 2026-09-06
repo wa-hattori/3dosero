@@ -13,6 +13,7 @@ description: ランダムマッチングにおけるプレイヤーネーム・E
 - 勝敗によるEloライクなスコア増減（強者に勝つと増分が大きく、弱者に負けると減少が大きい）。
 - スコアに応じた5階級表示。
 - スコア上位者のランキング表示。
+- **スコア・階級・対局数・ランキングは盤面サイズ（4×4×4／6×6×6／8×8×8）ごとに完全に独立して管理する。** 盤面サイズが違えばゲームの難度・対局時間・最善手の傾向が大きく異なり、同一のレーティングプールで比較する意味がないため。プレイヤーネームのみ盤面サイズ間で共有する識別情報として扱う（詳細は「データモデル」節参照）。
 - **アカウント登録は導入しない。** スコアはFirebase Anonymous Authenticationの`uid`に紐づく。ブラウザ/アプリのデータ消去・別ブラウザ/別端末・iOSアプリの再インストールで実績が失われる制約を許容する（[online-multiplayer](../online-multiplayer/SKILL.md)の「認証」節と同じ前提）。**アプリを閉じるだけではリセットされない**（認証情報はローカルに永続化されるため）。
 
 ## 不正防止の方針（重要・既知の限界あり）
@@ -25,7 +26,7 @@ description: ランダムマッチングにおけるプレイヤーネーム・E
 - 1回の更新で動ける幅は`MAX_SCORE_DELTA`（Kファクターと同じ値）に上限を設ける。
 - 同じ部屋の結果を二重に申告できないよう、部屋側に`settled.{black,white}`フラグを持たせ、スコア更新と同じ`writeBatch`で「未精算→精算済み」に一方向遷移させる。
 - **既知の抜け穴**: この「同じバッチで部屋の精算フラグも一緒に立てる」という制約は、Firestoreルールの仕組み上、**1つのドキュメント単体のルールだけでは「同じバッチ内で別ドキュメントへの書き込みも必ず伴う」ことを強制できない**（ルールはドキュメントごとに独立して評価され、同一バッチ内の他の書き込みを検知する手段がない）。そのため、意図的に部屋側の精算フラグ更新だけを省いて`players/{uid}`のスコア更新だけを繰り返し送信するクライアントを、ルールだけで完全に防ぐことはできない。この抜け穴を完全に塞ぐには、Cloud Functions等のサーバー側での結果確定が必要になるが、v1のスコープ外とする（[CLAUDE.md](../../../CLAUDE.md)の「サーバーコードを自前で書かない」方針、カジュアル対戦が主目的という位置づけを優先した判断）。将来的に本格的な不正対策が必要になった場合はここを見直す。
-- **CPU代替対戦（下記「CPU代替対戦」節）は、この抜け穴がさらに広い形で存在する**: 対人戦は少なくとも「実在する・終了済みの部屋」を必要とするが、CPU代替対戦は**その部屋自体を自分のクライアントが直接作れる**ため、実際に1分待つ・CPUと対局する、を一切せずとも精算コードを直接呼ぶだけで「CPUに勝った」という体裁の部屋を量産できてしまう。開始点となるスコア（`ratingSnapshot.black`）が自分の現在のスコアと一致することだけはルールで検証するため、Eloの計算自体は常に正直な値になる（変動幅も他と同じく`MAX_SCORE_DELTA`で頭打ち）が、「本当にCPU対戦をしたか」自体は検証できない。同じ理由（サーバーコードを書かない方針）でv1のスコープ外として受け入れる。
+- **CPU代替対戦（下記「CPU代替対戦」節）は、この抜け穴がさらに広い形で存在する**: 対人戦は少なくとも「実在する・終了済みの部屋」を必要とするが、CPU代替対戦は**その部屋自体を自分のクライアントが直接作れる**ため、実際に1分待つ・CPUと対局する、を一切せずとも精算コードを直接呼ぶだけで「CPUに勝った」という体裁の部屋を量産できてしまう。開始点となるスコア（`ratingSnapshot.black`）が自分の、この対局の盤面サイズにおける現在のスコアと一致することだけはルールで検証するため、Eloの計算自体は常に正直な値になる（変動幅も他と同じく`MAX_SCORE_DELTA`で頭打ち）が、「本当にCPU対戦をしたか」自体は検証できない。同じ理由（サーバーコードを書かない方針）でv1のスコープ外として受け入れる。
 
 ## Eloライクなスコア計算（純粋関数）
 
@@ -86,18 +87,21 @@ function getTier(score):
 
 ```
 players/{uid}
-  name: string                  # 1〜20文字、重複許可、フィルタリングなし
-  score: number                 # 初期値 DEFAULT_SCORE(1500)
-  gamesPlayed: number            # 初期値0
+  name: string                  # 1〜20文字、重複許可、フィルタリングなし。盤面サイズ間で共有
+  ratings: {                    # 盤面サイズ(4/6/8)をキーとする、スコア・対局数を独立管理するマップ
+    "4": { score: number, gamesPlayed: number },   # 初期値 score=DEFAULT_SCORE(1500), gamesPlayed=0
+    "6": { score: number, gamesPlayed: number },
+    "8": { score: number, gamesPlayed: number },
+  }
   updatedAt: serverTimestamp
 
 rooms/{roomId}                  # ランダムマッチング由来の部屋のみ、以下を追加で持つ
   ranked: boolean                # true固定。ルームコード制の部屋には無い(存在しない=false相当)
-  ratingSnapshot: { black: number, white: number }   # マッチ成立時点の両者のscore(Elo計算の基準値)
+  ratingSnapshot: { black: number, white: number }   # マッチ成立時点の両者の、この部屋のboardSizeにおけるscore(Elo計算の基準値)
   settled: { black: boolean, white: boolean }        # 各色がスコア更新を精算済みか
 ```
 
-`ratingSnapshot`は「マッチ成立時点」の値で固定し、対局中に（理論上）相手のスコアが変わっても計算がぶれないようにする。
+`ratingSnapshot`は「マッチ成立時点」の値で固定し、対局中に（理論上）相手のスコアが変わっても計算がぶれないようにする。**`ratings`はプレイヤーの識別情報である`name`とは別に、盤面サイズごとに独立したスコア・対局数を持つ。** プロフィール新規作成時（`createPlayerProfile`）に、対応する全盤面サイズ分を`DEFAULT_SCORE`/`0`で一括初期化する（`src/net/rating.js`の`createInitialRatingsByBoardSize`、盤面サイズの一覧は`src/logic/board.js`の`SUPPORTED_BOARD_SIZES`を正とする）。スコア更新（`settleRankedResult`）は対局した`boardSize`に対応する`ratings`エントリだけをFirestoreのドット区切りパス（例: `ratings.8.score`）で更新し、他の盤面サイズのエントリには一切触れない。
 
 ## フロー
 
@@ -107,7 +111,7 @@ rooms/{roomId}                  # ランダムマッチング由来の部屋の�
 
 ### ランダムマッチング成立時（`tryClaimCandidate`の拡張）
 
-部屋作成時に、両者の現在の`score`を`ratingSnapshot`として書き込み、`ranked: true`・`settled: {black: false, white: false}`を設定する。
+部屋作成時に、両者の**この対局の`boardSize`における**現在のスコア（`ratings[boardSize].score`）を`ratingSnapshot`として書き込み、`ranked: true`・`settled: {black: false, white: false}`を設定する。プロフィール未作成・該当盤面サイズ未対局（`ratings`に該当エントリがない）場合は`DEFAULT_SCORE`扱いにする。
 
 ### マッチ成立時（対局開始前の対戦カード画面）
 
@@ -129,8 +133,13 @@ function settleRankedResult(roomId, myColor, myResult):
   opponentScore = room.ratingSnapshot[opposite(myColor)]
   delta = calculateEloDelta(myScore, opponentScore, myResult)
 
+  # room.boardSizeに対応するratingsエントリだけを更新する。他の盤面サイズには触れない。
   batch:
-    update players/{myUid}: { score: myScore + delta, gamesPlayed: increment(1), updatedAt }
+    update players/{myUid}: {
+      [`ratings.${room.boardSize}.score`]: myScore + delta,
+      [`ratings.${room.boardSize}.gamesPlayed`]: increment(1),
+      updatedAt,
+    }
     update rooms/{roomId}: { settled.{myColor}: true }
   commit batch
 
@@ -160,7 +169,7 @@ NOTIONAL_RATING_BY_CPU_LEVEL = {
 
 ```
 function settleRankedCpuMatch(boardSize, board, cpuLevel, myResult):
-  myScore = 自分の現在のスコア(getMyPlayerProfileで取得)
+  myScore = 自分の、この対局のboardSizeにおける現在のスコア(getMyPlayerProfile(boardSize)で取得)
   cpuNotionalRating = NOTIONAL_RATING_BY_CPU_LEVEL[cpuLevel]
   roomId = 新規生成
 
@@ -183,26 +192,27 @@ function settleRankedCpuMatch(boardSize, board, cpuLevel, myResult):
 
 `players/{playerId}`:
 - `allow read: if true;`（ランキング表示のため公開）
-- `allow create`: 本人のuid、`name`が1〜20文字の文字列、`score == DEFAULT_SCORE`、`gamesPlayed == 0`の場合のみ。
+- `allow create`: 本人のuid、`name`が1〜20文字の文字列、対応する全盤面サイズ（4/6/8）分の`ratings[boardSize].score == DEFAULT_SCORE`・`ratings[boardSize].gamesPlayed == 0`の場合のみ。
 - 更新は**ケースごとに独立した`allow update`を複数書く**（[online-multiplayer](../online-multiplayer/SKILL.md)で得た教訓: 前提条件が異なる複数の更新パターンを1つの条件式に共通の前提でANDにまとめない）。
-  - 名前変更: 本人のuid、`score`/`gamesPlayed`は不変。
-  - スコア更新: 本人のuid、`name`は不変、`gamesPlayed`が+1、`score`の変化幅が`MAX_SCORE_DELTA`以内、かつ`get()`で参照先の`rooms/{roomId}`を読み、`status == 'finished' && ranked == true && (players.black == playerId || players.white == playerId) && settled[該当色] == false`であることを検証する。
+  - 名前変更: 本人のuid、`ratings`マップ全体（＝全盤面サイズ分のスコア・対局数）が不変。
+  - スコア更新: 本人のuid、`name`は不変。**更新後のドキュメントで、ちょうど1つの盤面サイズの`ratings`エントリだけが「`gamesPlayed`が+1、`score`の変化幅が`MAX_SCORE_DELTA`以内」で変化し、残り2つの盤面サイズのエントリは完全に不変**であることを検証する（ルール言語は動的なマップキーの型変換を保証しないため、3盤面サイズ分をそれぞれ明示的な条件分岐で書く）。加えて、変化した盤面サイズについて`get()`で参照先の`rooms/{roomId}`を読み、`status == 'finished' && ranked == true && boardSize == 該当盤面サイズ && (players.black == playerId || players.white == playerId) && settled[該当色] == false`であることを検証する（`boardSize`の一致チェックが無いと、例えば4×4×4の対局結果で8×8×8のスコアを不正に更新できてしまう）。
 
 `rooms/{roomId}`:
 - 精算フラグ更新用のケース（`isSettling`）を`allow update`に追加する。本人が参加者であり、`settled[自分の色]`が`false`→`true`への一方向遷移であることのみを許可する（他フィールドは変更不可）。
-- CPU代替対戦の記録用に、`allow create`へ第3のケースを追加する。`players.black`が本人・`players.white`が`null`・`status == 'finished'`・`ranked == true`・`settled == {black: false, white: true}`であり、かつ`ratingSnapshot.black`が`get()`で読んだ本人の現在のスコアと一致することを検証する（開始点の偽装を防ぐ。既知の限界は「不正防止の方針」節参照）。
+- CPU代替対戦の記録用に、`allow create`へ第3のケースを追加する。`players.black`が本人・`players.white`が`null`・`status == 'finished'`・`ranked == true`・`settled == {black: false, white: true}`であり、かつ`ratingSnapshot.black`が`get()`で読んだ本人の、**この対局の`boardSize`における**現在のスコアと一致することを検証する（開始点の偽装を防ぐ。既知の限界は「不正防止の方針」節参照）。
 
 ## モジュール構成
 
-- `src/net/rating.js` — Elo計算・階級判定の純粋関数（`calculateEloDelta`/`getTier`/`getTierInfo`/`DEFAULT_SCORE`等の定数）。**Firebase依存なし**、Node標準テストで検証する。
+- `src/net/rating.js` — Elo計算・階級判定の純粋関数（`calculateEloDelta`/`getTier`/`getTierInfo`/`DEFAULT_SCORE`等の定数）に加え、`createInitialRatingsByBoardSize()`（対応する全盤面サイズ分の初期`ratings`マップを組み立てる。`src/logic/board.js`の`SUPPORTED_BOARD_SIZES`を使う）。**Firebase依存なし**、Node標準テストで検証する。
 - `src/net/matchmaking-cpu-fallback.js` — CPU代替対戦の階級→CPUレベル・みなしレーティングの純粋関数（`getFallbackCpuLevel`/`getFallbackCpuNotionalRating`/`FALLBACK_WAIT_MS`）。**Firebase依存なし**、Node標準テストで検証する。
-- `src/net/player-profile.js` — `players/{uid}`の作成・名前更新・取得（`getMyPlayerProfile`は自分、`getPlayerProfile(uid)`は任意のプレイヤー。対戦相手表示に使う）。Firestoreへの実際の読み書き（自動テスト対象外）。
-- `src/net/rating-settlement.js` — 対局終了時のスコア精算（`writeBatch`）。精算結果（`beforeScore`/`afterScore`/`delta`）を呼び出し側に返し、スコア変動画面の描画に使う。`settleRankedCpuMatch`（CPU代替対戦用）も同居する。Firestoreへの実際の読み書き（自動テスト対象外）。
+- `src/net/player-profile.js` — `players/{uid}`の作成・名前更新・取得。**スコア・対局数は盤面サイズごとに独立管理する**ため、`getMyPlayerProfile(boardSize)`（自分）・`getPlayerProfile(uid, boardSize)`（任意のプレイヤー。対戦相手表示に使う）はいずれも`boardSize`を引数に取り、`ratings[boardSize]`のエントリを返す（`name`は盤面サイズに依らず共通）。`createPlayerProfile(name)`は`createInitialRatingsByBoardSize()`で全盤面サイズ分を一括初期化する。Firestoreへの実際の読み書き（自動テスト対象外）。
+- `src/net/rating-settlement.js` — 対局終了時のスコア精算（`writeBatch`）。対局した`boardSize`（`rooms/{roomId}`の`boardSize`フィールドから取得）に対応する`ratings`エントリだけをドット区切りパスで更新する。精算結果（`beforeScore`/`afterScore`/`delta`）を呼び出し側に返し、スコア変動画面の描画に使う。`settleRankedCpuMatch`（CPU代替対戦用）も同居する。Firestoreへの実際の読み書き（自動テスト対象外）。
+- `src/net/leaderboard.js` の `fetchLeaderboard(boardSize)` — 指定した盤面サイズの`ratings[boardSize].score`降順でスコア上位者を取得する。
 - `src/net/room-sync.js` の `getRoomSummary(roomId)` — 対戦カード画面用の軽量な部屋情報の一度読み取り。
 - `src/ui/tier-icon.js` — 階級アイコン（コイン型、CSSグラデーションのみ）のDOM要素生成。
 - `src/ui/vs-screen.js` — マッチ成立時の対戦カード画面。
 - `src/ui/score-change-screen.js` — 対局終了後のスコア変動可視化画面。
-- `src/ui/start-screen.js` — プレイヤーネーム入力ステップ・ランキング画面・プロフィール画面を追加する。`startRandomMatch`はチケット待機開始と同時に`FALLBACK_WAIT_MS`の`setTimeout`を仕掛け、マッチが先に成立すれば`clearFallbackTimeout`で解除し、成立しないまま発火したら`startCpuFallbackMatch`でCPU対戦（`battleMode: 'cpu'`、`rankedCpuMatch: { cpuLevel }`付き）に切り替える。
+- `src/ui/start-screen.js` — プレイヤーネーム入力ステップ・ランキング画面・プロフィール画面を追加する。**ランキング・プロフィールはスコア同様に盤面サイズごとに独立集計のため、モード選択画面から「ランキングを見る」「プロフィール」を選んだ場合も、対局モードと同じ盤面サイズ選択ステップ（`showBoardSizeStep`）を経由してから該当盤面サイズの結果を表示する。** `startRandomMatch`はチケット待機開始と同時に`FALLBACK_WAIT_MS`の`setTimeout`を仕掛け、マッチが先に成立すれば`clearFallbackTimeout`で解除し、成立しないまま発火したら`startCpuFallbackMatch`でCPU対戦（`battleMode: 'cpu'`、`rankedCpuMatch: { cpuLevel }`付き）に切り替える。
 - `src/main.js` — `startGame`が`rankedCpuMatch`を受け取り、CPU対戦の対局終了時（`applyMoveAndAdvance`のisOver分岐）に非`null`なら`settleRankedCpuMatch`を呼んでからend-screen/score-change-screenへ繋げる（オンライン対戦のレート戦精算と同じ`showEndScreen`ヘルパーを共有する）。
 
 ## 参照
