@@ -1,0 +1,64 @@
+name: Bootstrap iOS Signing Identity
+
+# 正本: .claude/skills/ios-native-packaging/SKILL.md の「持続的な署名identityの再利用」節。
+#
+# CIランナーは毎回まっさらなキーチェーンで動くため、通常の
+# .github/workflows/ios-release.yml（bundle exec fastlane release）は
+# 実行のたびに新しい開発用証明書を発行してしまい、Appleの証明書発行上限に
+# いずれ達する（実際に発生した不具合）。このワークフローは、一度だけ
+# （または証明書を失効させ直したタイミングで）新しいsigning identityを作成し、
+# .p12としてエクスポートしたものをアーティファクトとして公開する。
+#
+# **実行する前に、IOS_SIGNING_P12_PASSWORD Secretsを（値は任意でよいので）
+# 事前に登録しておくこと。** 実行後、アーティファクトをダウンロードして
+# base64化し、IOS_SIGNING_P12_BASE64 Secretsとして登録すれば、以降の
+# ios-release.ymlはこのidentityを再利用し、新規証明書を発行しなくなる。
+#
+# workflow_dispatchのみで起動する（タグpushでは起動しない。証明書を無闇に
+# 増やさないよう、明示的に実行した時だけ動かす）。App Store Connect
+# APIキーを使うため、ios-release.ymlと同じapp-store-release Environment
+# （Required reviewers）で承認を必須にする。
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: macos-latest
+    environment:
+      name: app-store-release
+    defaults:
+      run:
+        working-directory: ios-app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Ruby (fastlane)
+        uses: ruby/setup-ruby@v1.321.0
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: ios-app
+
+      - name: Create and export a new signing identity
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+          ASC_TEAM_ID: ${{ secrets.ASC_TEAM_ID }}
+          IOS_SIGNING_P12_PASSWORD: ${{ secrets.IOS_SIGNING_P12_PASSWORD }}
+        run: bundle exec fastlane bootstrap_signing_identity
+
+      - name: Upload the exported .p12 as a short-lived artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-signing-identity
+          path: ios-app/exported-signing-identity.p12
+          # 秘密鍵を含むため、Secretsに登録済みの証明として不要になったら
+          # すぐ消えるよう保持期間を短くする(base64化してSecrets登録したら
+          # 手動で削除してもよい)。
+          retention-days: 1
