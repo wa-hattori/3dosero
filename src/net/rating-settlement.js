@@ -48,10 +48,13 @@ export const settleRankedResult = async ({ roomId, myColor, myResult }) => {
   const beforeScore = room.ratingSnapshot[myKey];
   const delta = calculateEloDelta(beforeScore, room.ratingSnapshot[opponentKey], myResult);
 
+  // スコア・対局数は盤面サイズごとに独立管理するため、この対局の`boardSize`に
+  // 対応する`ratings`エントリだけをドット区切りパスで更新する
+  // （[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)参照）。
   const batch = writeBatch(db);
   batch.update(doc(db, PLAYERS_COLLECTION, uid), {
-    score: increment(delta),
-    gamesPlayed: increment(1),
+    [`ratings.${room.boardSize}.score`]: increment(delta),
+    [`ratings.${room.boardSize}.gamesPlayed`]: increment(1),
     // セキュリティルールが「どの部屋の結果を根拠にした更新か」を検証するための
     // 参照(firestore.rulesの`isScoreSettlement`参照)。
     lastSettledRoomId: roomId,
@@ -80,7 +83,7 @@ export const settleRankedResult = async ({ roomId, myColor, myResult }) => {
 export const settleRankedCpuMatch = async ({ boardSize, board, cpuLevel, myResult }) => {
   const uid = await ensureSignedIn();
   const db = getFirestoreInstance();
-  const profile = await getMyPlayerProfile();
+  const profile = await getMyPlayerProfile(boardSize);
   const roomId = generateRoomCode();
   const cpuNotionalRating = getFallbackCpuNotionalRating(cpuLevel);
   const winner = myResult === MATCH_RESULT.WIN ? BLACK : myResult === MATCH_RESULT.LOSS ? WHITE : null;
