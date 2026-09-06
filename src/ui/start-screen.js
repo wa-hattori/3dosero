@@ -11,7 +11,12 @@ import {
 } from '../net/room-sync.js';
 import { cancelRandomMatch, requestRandomMatch, subscribeToTicket } from '../net/matchmaking.js';
 import { ROOM_CODE_LENGTH, isValidRoomCode } from '../net/room-code.js';
-import { createPlayerProfile, getMyPlayerProfile, getPlayerProfile } from '../net/player-profile.js';
+import {
+  createPlayerProfile,
+  getMyPlayerProfile,
+  getMyProfileSummary,
+  getPlayerProfile,
+} from '../net/player-profile.js';
 import { getRoomSummary, startGameClock } from '../net/room-sync.js';
 import { MAX_NAME_LENGTH, getTier } from '../net/rating.js';
 import { FALLBACK_WAIT_MS, getFallbackCpuLevel } from '../net/matchmaking-cpu-fallback.js';
@@ -238,10 +243,6 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
         }
         if (selectedBattleMode === 'ranking') {
           showRankingStep();
-          return;
-        }
-        if (selectedBattleMode === 'profile') {
-          showProfileStep();
           return;
         }
         finishSelection();
@@ -506,16 +507,15 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
   };
 
   const showProfileStep = async () => {
-    const boardSizeLabel = `${selectedBoardSize}×${selectedBoardSize}×${selectedBoardSize}`;
     subtitle.textContent = 'プロフィールを読み込んでいます…';
     backButton.hidden = false;
-    backButton.textContent = '← 盤面サイズ選択に戻る';
+    backButton.textContent = '← モード選択に戻る';
     currentStep = 'profile';
     clearError();
     clearButtons();
 
     try {
-      const profile = await getMyPlayerProfile(selectedBoardSize);
+      const profile = await getMyProfileSummary();
       if (currentStep !== 'profile') return; // 読み込み中に他の画面へ移動していたら何もしない
 
       if (!profile) {
@@ -524,20 +524,27 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
         return;
       }
 
-      subtitle.textContent = boardSizeLabel;
+      subtitle.textContent = '';
 
       const nameLine = document.createElement('p');
       nameLine.className = 'start-screen-profile-name';
-      nameLine.appendChild(createTierIcon(profile.score));
       const nameText = document.createElement('span');
       nameText.textContent = profile.name;
       nameLine.appendChild(nameText);
       buttonRow.appendChild(nameLine);
 
-      const scoreLine = document.createElement('p');
-      scoreLine.className = 'start-screen-profile-score';
-      scoreLine.textContent = `スコア ${profile.score}（${getTier(profile.score)}）　${profile.gamesPlayed}戦`;
-      buttonRow.appendChild(scoreLine);
+      // スコア・階級は盤面サイズごとに独立管理のため、全モード分をまとめて表示する
+      // （[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)参照）。
+      for (const { boardSize, score, gamesPlayed } of profile.ratings) {
+        const scoreLine = document.createElement('p');
+        scoreLine.className = 'start-screen-profile-score';
+        scoreLine.appendChild(createTierIcon(score));
+        const scoreText = document.createElement('span');
+        scoreText.textContent =
+          `${boardSize}×${boardSize}×${boardSize}　スコア ${score}（${getTier(score)}）　${gamesPlayed}戦`;
+        scoreLine.appendChild(scoreText);
+        buttonRow.appendChild(scoreLine);
+      }
     } catch (error) {
       console.error('プロフィールの取得に失敗しました', error);
       if (currentStep === 'profile') {
@@ -583,10 +590,11 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     profileButton.textContent = 'プロフィール';
     profileButton.addEventListener('click', () => {
       playClickSound();
-      // スコア・階級は盤面サイズごとに独立管理のため、先に盤面サイズを選ばせる
-      // （[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)参照）。
-      selectedBattleMode = 'profile';
-      showBoardSizeStep();
+      // スコア・階級は盤面サイズごとに独立管理だが、プロフィール画面では
+      // 全モード分を一括表示するため、盤面サイズ選択を挟まず直接表示する
+      // （ランキングは対象がランダムマッチングの相手探しと直結するため、
+      // 引き続き盤面サイズを先に選ばせる）。
+      showProfileStep();
     });
     buttonRow.appendChild(profileButton);
   };
@@ -605,7 +613,7 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
       showOnlineMethodStep();
       return;
     }
-    if (currentStep === 'ranking' || currentStep === 'profile') {
+    if (currentStep === 'ranking') {
       showBoardSizeStep();
       return;
     }
