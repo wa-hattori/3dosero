@@ -205,14 +205,14 @@ function settleRankedCpuMatch(boardSize, board, cpuLevel, myResult):
 
 - `src/net/rating.js` — Elo計算・階級判定の純粋関数（`calculateEloDelta`/`getTier`/`getTierInfo`/`DEFAULT_SCORE`等の定数）に加え、`createInitialRatingsByBoardSize()`（対応する全盤面サイズ分の初期`ratings`マップを組み立てる。`src/logic/board.js`の`SUPPORTED_BOARD_SIZES`を使う）。**Firebase依存なし**、Node標準テストで検証する。
 - `src/net/matchmaking-cpu-fallback.js` — CPU代替対戦の階級→CPUレベル・みなしレーティングの純粋関数（`getFallbackCpuLevel`/`getFallbackCpuNotionalRating`/`FALLBACK_WAIT_MS`）。**Firebase依存なし**、Node標準テストで検証する。
-- `src/net/player-profile.js` — `players/{uid}`の作成・名前更新・取得。**スコア・対局数は盤面サイズごとに独立管理する**ため、`getMyPlayerProfile(boardSize)`（自分）・`getPlayerProfile(uid, boardSize)`（任意のプレイヤー。対戦相手表示に使う）はいずれも`boardSize`を引数に取り、`ratings[boardSize]`のエントリを返す（`name`は盤面サイズに依らず共通）。`createPlayerProfile(name)`は`createInitialRatingsByBoardSize()`で全盤面サイズ分を一括初期化する。Firestoreへの実際の読み書き（自動テスト対象外）。
+- `src/net/player-profile.js` — `players/{uid}`の作成・名前更新・取得。**スコア・対局数は盤面サイズごとに独立管理する**ため、`getMyPlayerProfile(boardSize)`（自分）・`getPlayerProfile(uid, boardSize)`（任意のプレイヤー。対戦相手表示に使う）はいずれも`boardSize`を引数に取り、`ratings[boardSize]`のエントリを返す（`name`は盤面サイズに依らず共通）。プロフィール画面（全モード一括表示）専用に`getMyProfileSummary()`もあり、1回のドキュメント読み取りで対応する全盤面サイズ分の`{ boardSize, score, gamesPlayed }`をまとめて返す。`createPlayerProfile(name)`は`createInitialRatingsByBoardSize()`で全盤面サイズ分を一括初期化する。Firestoreへの実際の読み書き（自動テスト対象外）。
 - `src/net/rating-settlement.js` — 対局終了時のスコア精算（`writeBatch`）。対局した`boardSize`（`rooms/{roomId}`の`boardSize`フィールドから取得）に対応する`ratings`エントリだけをドット区切りパスで更新する。精算結果（`beforeScore`/`afterScore`/`delta`）を呼び出し側に返し、スコア変動画面の描画に使う。`settleRankedCpuMatch`（CPU代替対戦用）も同居する。Firestoreへの実際の読み書き（自動テスト対象外）。
 - `src/net/leaderboard.js` の `fetchLeaderboard(boardSize)` — 指定した盤面サイズの`ratings[boardSize].score`降順でスコア上位者を取得する。
 - `src/net/room-sync.js` の `getRoomSummary(roomId)` — 対戦カード画面用の軽量な部屋情報の一度読み取り。
 - `src/ui/tier-icon.js` — 階級アイコン（コイン型、CSSグラデーションのみ）のDOM要素生成。
 - `src/ui/vs-screen.js` — マッチ成立時の対戦カード画面。
 - `src/ui/score-change-screen.js` — 対局終了後のスコア変動可視化画面。
-- `src/ui/start-screen.js` — プレイヤーネーム入力ステップ・ランキング画面・プロフィール画面を追加する。**ランキング・プロフィールはスコア同様に盤面サイズごとに独立集計のため、モード選択画面から「ランキングを見る」「プロフィール」を選んだ場合も、対局モードと同じ盤面サイズ選択ステップ（`showBoardSizeStep`）を経由してから該当盤面サイズの結果を表示する。** `startRandomMatch`はチケット待機開始と同時に`FALLBACK_WAIT_MS`の`setTimeout`を仕掛け、マッチが先に成立すれば`clearFallbackTimeout`で解除し、成立しないまま発火したら`startCpuFallbackMatch`でCPU対戦（`battleMode: 'cpu'`、`rankedCpuMatch: { cpuLevel }`付き）に切り替える。
+- `src/ui/start-screen.js` — プレイヤーネーム入力ステップ・ランキング画面・プロフィール画面を追加する。**ランキングはスコア同様に盤面サイズごとに独立集計のため、モード選択画面から「ランキングを見る」を選んだ場合は対局モードと同じ盤面サイズ選択ステップ（`showBoardSizeStep`）を経由してから該当盤面サイズの結果を表示する。一方プロフィールは、全モードのスコア・階級を一度に見比べたいという要望から、盤面サイズ選択を挟まず`getMyProfileSummary()`で対応する全盤面サイズ分をまとめて表示する。** `startRandomMatch`はチケット待機開始と同時に`FALLBACK_WAIT_MS`の`setTimeout`を仕掛け、マッチが先に成立すれば`clearFallbackTimeout`で解除し、成立しないまま発火したら`startCpuFallbackMatch`でCPU対戦（`battleMode: 'cpu'`、`rankedCpuMatch: { cpuLevel }`付き）に切り替える。
 - `src/main.js` — `startGame`が`rankedCpuMatch`を受け取り、CPU対戦の対局終了時（`applyMoveAndAdvance`のisOver分岐）に非`null`なら`settleRankedCpuMatch`を呼んでからend-screen/score-change-screenへ繋げる（オンライン対戦のレート戦精算と同じ`showEndScreen`ヘルパーを共有する）。
 
 ## 参照
