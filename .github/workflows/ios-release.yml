@@ -75,4 +75,10 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
           ASC_TEAM_ID: ${{ secrets.ASC_TEAM_ID }}
+          # 永続化済みの署名identityがある場合のみ再利用する（無ければ従来通り
+          # build_appの自動署名に任せる。どちらのSecretも未設定ならFastfile側の
+          # 条件分岐で単に読み飛ばされる。bootstrap手順は
+          # .github/workflows/ios-bootstrap-signing.yml参照）。
+          IOS_SIGNING_P12_BASE64: ${{ secrets.IOS_SIGNING_P12_BASE64 }}
+          IOS_SIGNING_P12_PASSWORD: ${{ secrets.IOS_SIGNING_P12_PASSWORD }}
         run: bundle exec fastlane release

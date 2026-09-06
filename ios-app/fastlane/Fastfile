@@ -7,7 +7,9 @@
 # dotenv経由で読み込まれる。
 
 require "base64"
+require "securerandom"
 require "tempfile"
+require "tmpdir"
 
 default_platform(:ios)
 
@@ -20,6 +22,35 @@ default_platform(:ios)
 # なお本プロジェクトはCapacitor 8のSwift Package Manager構成のため
 # `.xcworkspace`は存在せず、`.xcodeproj`を直接指定する。
 XCODEPROJ_PATH = "ios/App/App.xcodeproj"
+
+# CI専用の一時キーチェーンのパス。`$RUNNER_TEMP`（GitHub Actionsのジョブ単位の
+# 一時ディレクトリ、ジョブ終了時に自動削除される）配下に置く
+# （GitHub公式ドキュメント「Installing an Apple certificate on macOS runners
+# for Xcode development」の推奨パターンにそのまま従う）。ローカル実行時は
+# `RUNNER_TEMP`が無いためOSの一時ディレクトリにフォールバックする。
+CI_KEYCHAIN_PATH = File.join(ENV.fetch("RUNNER_TEMP", Dir.tmpdir), "ios_release_ci.keychain-db")
+
+# 署名用の秘密鍵付き証明書（signing identity）をCI専用の一時キーチェーンに
+# 作成し、検索リストの先頭に追加する。呼び出し元で`security import`
+# （既存の永続化済みidentityの再利用）または`get_certificates`
+# （新規identityの作成、`bootstrap_signing_identity`レーン専用）のいずれかを
+# 続けて呼ぶ前提の共通セットアップ。
+# GitHub公式ドキュメント「Installing an Apple certificate on macOS runners for
+# Xcode development」の手順をそのまま踏襲する。
+# @return [String] このキーチェーン自身のロック解除パスワード（後続の
+#   `security import`/`set-key-partition-list`で必要)
+def create_and_activate_ci_keychain
+  keychain_password = SecureRandom.hex(16)
+  sh("security", "create-keychain", "-p", keychain_password, CI_KEYCHAIN_PATH)
+  sh("security", "set-keychain-settings", "-lut", "21600", CI_KEYCHAIN_PATH)
+  sh("security", "unlock-keychain", "-p", keychain_password, CI_KEYCHAIN_PATH)
+  # このジョブ専用のランナーであり他に共存させたいキーチェーンが無いため、
+  # 検索リストをこのキーチェーン1つに絞ってよい（既存の検索リストを
+  # 保持したい場合は`-s`の前に`security list-keychains -d user`の結果を
+  # 展開して渡す必要があるが、ここでは不要）。
+  sh("security", "list-keychains", "-d", "user", "-s", CI_KEYCHAIN_PATH)
+  keychain_password
+end
 
 platform :ios do
   desc "ローカル動作確認用: 自動署名でXcodeプロジェクトがビルドできることだけを確認する" \
@@ -45,11 +76,51 @@ platform :ios do
       is_key_content_base64: true,
     )
 
-    if ENV["MARKETING_VERSION"]
+    # Rubyでは空文字列も真扱いになるため`ENV["X"]`だけでは不十分。
+    # `fastlane/.env.default`は「省略時はXcodeプロジェクトの現在値のまま」を
+    # 意図しており、`.env`でこれらを空欄のままにするローカル実行を許容する
+    # 設計のため、空文字列は「未指定」として扱う必要がある。
+    if !ENV["MARKETING_VERSION"].to_s.empty?
       increment_version_number(xcodeproj: XCODEPROJ_PATH, version_number: ENV["MARKETING_VERSION"])
     end
-    if ENV["BUILD_NUMBER"]
+    if !ENV["BUILD_NUMBER"].to_s.empty?
       increment_build_number(xcodeproj: XCODEPROJ_PATH, build_number: ENV["BUILD_NUMBER"])
+    end
+
+    # CIランナーは毎回まっさらなキーチェーンで動くため、`update_code_signing_settings`
+    # + `build_app`の自動署名（下記）に任せきりだと、既存の証明書の秘密鍵を
+    # 引き継げず、実行のたびに新しい開発用証明書を発行してしまう。Appleは
+    # アカウントあたりの証明書発行数に上限があるため、これを繰り返すと
+    # 「Your account has reached the maximum number of certificates」で
+    # ビルドできなくなる（実際に発生した不具合。[ios-native-packaging](../../.claude/skills/ios-native-packaging/SKILL.md)
+    # のエッジケース参照）。
+    #
+    # 対処として、`bootstrap_signing_identity`レーン（一度だけ、または証明書を
+    # 失効させ直したタイミングで手動実行）で作成・エクスポートしたsigning
+    # identity（証明書+秘密鍵の.p12、GitHub Secretsに保存済み）が存在する場合は
+    # それをこのランナーのキーチェーンにインポートして再利用する。これにより
+    # `build_app`の`-allowProvisioningUpdates`はプロビジョニングプロファイルの
+    # 同期だけを行い（プロファイルは証明書と違い上限を気にせず再生成できる）、
+    # 新規証明書の発行を伴わない。
+    # Rubyでは空文字列も真扱いになるため`ENV["X"] &&`だけでは不十分
+    # （GitHub ActionsはSecret未設定でも`env:`に空文字列として変数を注入するため、
+    # CIでは確実に空文字列のケースを踏む）。`.to_s.empty?`で明示的に判定する。
+    if !ENV["IOS_SIGNING_P12_BASE64"].to_s.empty? && !ENV["IOS_SIGNING_P12_PASSWORD"].to_s.empty?
+      keychain_password = create_and_activate_ci_keychain
+
+      p12_file = Tempfile.new(["ios_signing_identity", ".p12"])
+      p12_file.binmode
+      p12_file.write(Base64.decode64(ENV.fetch("IOS_SIGNING_P12_BASE64")))
+      p12_file.close
+
+      sh("security", "import", p12_file.path,
+         "-P", ENV.fetch("IOS_SIGNING_P12_PASSWORD"),
+         "-A", "-t", "cert", "-f", "pkcs12", "-k", CI_KEYCHAIN_PATH)
+      # codesign/xcodebuildが対話的な許可プロンプトなしで秘密鍵にアクセスできる
+      # ようにする（GitHub公式ドキュメントの推奨手順。これを省略すると非対話的な
+      # CI環境で署名がハングしたり失敗したりしうる）。
+      sh("security", "set-key-partition-list", "-S", "apple-tool:,apple:",
+         "-k", keychain_password, CI_KEYCHAIN_PATH)
     end
 
     # `npx cap add ios`が生成した直後のプロジェクトはCODE_SIGN_STYLE=Automaticだが
@@ -102,6 +173,48 @@ platform :ios do
     upload_to_testflight(
       api_key: api_key,
       skip_waiting_for_build_processing: true,
+    )
+  end
+
+  desc "一度だけ（または証明書を失効させ直して再発行したい時だけ）実行する: " \
+       "新規の開発用signing identityを作成し、以降のreleaseレーンで再利用できるよう" \
+       ".p12としてエクスポートする(ios-native-packaging SKILL.mdの「持続的な署名identityの再利用」参照)。" \
+       "IOS_SIGNING_P12_PASSWORD環境変数（エクスポート後のp12を保護するパスワード。事前に決めて" \
+       "GitHub Secretsにも登録しておく）が必須。実行後、ios-app/exported-signing-identity.p12を" \
+       "base64化してIOS_SIGNING_P12_BASE64としてGitHub Secretsに登録すること。"
+  lane :bootstrap_signing_identity do
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_content: ENV.fetch("ASC_KEY_CONTENT"),
+      is_key_content_base64: true,
+    )
+    export_password = ENV.fetch("IOS_SIGNING_P12_PASSWORD")
+
+    create_and_activate_ci_keychain
+
+    # `get_certificates`（cert）は、指定したキーチェーンに有効なidentityが
+    # 既に無ければAppleに新規発行を申請する。**このレーンを実行するたびに
+    # 証明書を1つ消費する**ため、繰り返し実行しない（Apple Developer側の
+    # 証明書発行上限に達している場合は、先に不要な証明書を失効させておくこと。
+    # https://developer.apple.com/account/resources/certificates/list ）。
+    get_certificates(
+      development: true,
+      api_key: api_key,
+      team_id: ENV.fetch("ASC_TEAM_ID"),
+      keychain_path: CI_KEYCHAIN_PATH,
+    )
+
+    exported_path = File.expand_path("exported-signing-identity.p12")
+    sh("security", "export", "-k", CI_KEYCHAIN_PATH, "-t", "identities",
+       "-f", "pkcs12", "-P", export_password, "-o", exported_path)
+
+    UI.success("Exported signing identity to #{exported_path}")
+    UI.important(
+      "次の手順: 1) このファイルをbase64化する（例: `base64 -i #{exported_path} | pbcopy`）" \
+      "2) その内容をGitHub SecretsのIOS_SIGNING_P12_BASE64に登録する " \
+      "3) IOS_SIGNING_P12_PASSWORD（このレーンに渡した値そのもの）も既にSecretsに登録済みであることを確認する " \
+      "4) releaseレーンを実行すると、以降は新規証明書を発行せずこのidentityを再利用する",
     )
   end
 end
