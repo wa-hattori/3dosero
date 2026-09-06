@@ -21,6 +21,7 @@ import { getRoomSummary, startGameClock } from '../net/room-sync.js';
 import { MAX_NAME_LENGTH, getTier } from '../net/rating.js';
 import { FALLBACK_WAIT_MS, getFallbackCpuLevel } from '../net/matchmaking-cpu-fallback.js';
 import { fetchLeaderboard } from '../net/leaderboard.js';
+import { withTimeout } from '../net/with-timeout.js';
 import { createTierIcon } from './tier-icon.js';
 import { createVsScreen } from './vs-screen.js';
 
@@ -29,6 +30,15 @@ const BATTLE_MODES = [
   { id: 'local', label: '2人対戦' },
   { id: 'online', label: 'オンライン対戦' },
 ];
+
+/**
+ * ランキング・プロフィール・ランダムマッチングのFirebase呼び出しに与える
+ * タイムアウト。iOS実機でFirebase Auth/Firestoreが応答なくハングする既知の問題
+ * （[firebase-init.js](../net/firebase-init.js)参照）が万一再発した場合に、
+ * 無限ローディング表示のままにせず、既存のエラー表示（try/catch）に乗せて
+ * 気付けるようにするための保険。
+ */
+const NETWORK_TIMEOUT_MS = 15_000;
 
 /** オンライン対戦の参加方法。 */
 const ONLINE_METHODS = [
@@ -365,7 +375,11 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     // プロフィール確認自体も失敗しうる(権限エラー・ネットワーク断)ため、この関数全体を
     // 1つのtry/catchで包む(ここだけ外に出すとエラー時に無反応のまま固まってしまう)。
     try {
-      const profile = await getMyPlayerProfile(selectedBoardSize);
+      const profile = await withTimeout(
+        getMyPlayerProfile(selectedBoardSize),
+        NETWORK_TIMEOUT_MS,
+        'プロフィールの取得がタイムアウトしました',
+      );
       if (!profile) {
         showPlayerNameStep();
         return;
@@ -374,7 +388,11 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
       showOnlineWaitingStep(
         '対戦相手を探しています…\n（1分見つからない場合は同ランクのCPUと対戦します）',
       );
-      const { ticketId, roomId } = await requestRandomMatch(selectedBoardSize);
+      const { ticketId, roomId } = await withTimeout(
+        requestRandomMatch(selectedBoardSize),
+        NETWORK_TIMEOUT_MS,
+        'マッチングの開始がタイムアウトしました',
+      );
       if (roomId) {
         // 自分が既存の待機チケットを見つけてマッチさせた側 = 白番。
         proceedToRankedMatch({ roomId, color: WHITE });
@@ -483,7 +501,11 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     clearButtons();
 
     try {
-      const entries = await fetchLeaderboard(selectedBoardSize);
+      const entries = await withTimeout(
+        fetchLeaderboard(selectedBoardSize),
+        NETWORK_TIMEOUT_MS,
+        'ランキングの取得がタイムアウトしました',
+      );
       if (currentStep !== 'ranking') return; // 読み込み中に他の画面へ移動していたら何もしない
 
       if (entries.length === 0) {
@@ -515,7 +537,11 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     clearButtons();
 
     try {
-      const profile = await getMyProfileSummary();
+      const profile = await withTimeout(
+        getMyProfileSummary(),
+        NETWORK_TIMEOUT_MS,
+        'プロフィールの取得がタイムアウトしました',
+      );
       if (currentStep !== 'profile') return; // 読み込み中に他の画面へ移動していたら何もしない
 
       if (!profile) {

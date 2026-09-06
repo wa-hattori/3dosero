@@ -167,10 +167,11 @@ function forfeitRoom(roomId, myColor):
 
 - `src/net/room-code.js` — ルームコードの生成・書式検証。**純粋関数、Firebase依存なし**。Node標準テストで検証する。
 - `src/net/board-serialization.js` — 盤面（`Int8Array`）とFirestoreの配列表現の相互変換。**純粋関数、Firebase依存なし**。Node標準テストで検証する。
-- `src/net/firebase-init.js` — Firebase App/Firestore/Authの初期化（CDN経由のESモジュール）。設定値は`src/net/firebase-config.js`から読む。
+- `src/net/firebase-init.js` — Firebase App/Firestore/Authの初期化（CDN経由のESモジュール）。設定値は`src/net/firebase-config.js`から読む。**【実際に踏んだ不具合】iOS（Capacitor）ネイティブシェル上では、既定の`getAuth`/`getFirestore`がランダムマッチング・プロフィール・ランキングのいずれでも無応答のままハングした（Web版では再現しない。TestFlight実機で発覚）。** 原因は、iOSのWKWebViewがローカルアセットを`capacitor://`という独自スキームで配信すること。Firebase Auth（リダイレクトリゾルバ初期化時のiframeベースの互換チェック）・Firestore（WebChannelのストリーミング接続）はいずれも通常の`http(s)://`オリジンを前提にしており、独自スキーム上では正常に完了せず無期限にハングしうる（Firebase JS SDK・Capacitorコミュニティで広く報告されている既知の相性問題）。対処として、iOSネイティブシェル上でのみ`initializeAuth`（`persistence`を明示指定し既定の`browserPopupRedirectResolver`初期化を避ける）・`initializeFirestore`（`experimentalForceLongPolling: true`でストリーミング接続を避ける）を使う（`isNativeIOS()`での分岐、判定ロジック自体は`src/ads/interstitial-ads.js`と重複するが`src/net/`を`src/ads/`に依存させないためあえて共有しない）。この種の「Web版では再現しないFirebase呼び出しのハング」に遭遇したら、まずこの相性問題を疑うこと。
 - `src/net/firebase-config.js` — プロジェクトごとのFirebase設定値（`apiKey`等）。**実際の値はユーザーがFirebaseコンソールでプロジェクトを作成した後に埋める**。プレースホルダーの状態でコミットする。
 - `src/net/room-sync.js` — `createRoom`/`joinRoom`/`submitMove`/`subscribeToRoom`。Firestoreへの実際の読み書き（非同期I/O、自動テスト対象外は`testing.md`の方針に準ずる）。
 - `src/net/matchmaking.js` — `requestRandomMatch`/`subscribeToTicket`/`cancelRandomMatch`。トランザクションによる排他制御を含む。
+- `src/net/with-timeout.js` — `withTimeout(promise, timeoutMs, timeoutMessage)`。指定時間内に解決/拒否しなければタイムアウトエラーで拒否する**純粋関数、Firebase依存なし**（Node標準テストで検証）。上記のFirebase呼び出しハング問題が万一再発した場合に、無限ローディング表示のままにせず既存のエラー表示経路に乗せるための保険として`src/ui/start-screen.js`のランキング・プロフィール・ランダムマッチングで使う。
 
 ## 参照
 
