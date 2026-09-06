@@ -205,7 +205,15 @@ platform :ios do
       keychain_path: CI_KEYCHAIN_PATH,
     )
 
-    exported_path = File.expand_path("exported-signing-identity.p12")
+    # 【実際に踏んだ不具合】`File.expand_path("exported-signing-identity.p12")`
+    # （カレントディレクトリからの相対パス）を使ったところ、実際には
+    # `ios-app/`ではなく`ios-app/fastlane/`配下に書き出された。fastlaneの
+    # アクション（`increment_version_number`等）が内部で解決するプロジェクト
+    # ルートと、Rubyプロセス自身の`Dir.pwd`は別物であり、素の`File.expand_path`
+    # は後者（`fastlane/`ディレクトリ自身）を基準にする。ファイル自身の位置
+    # （`__dir__`）から明示的に相対解決することで、実行時のカレント
+    # ディレクトリに依存しないようにする。
+    exported_path = File.expand_path("../exported-signing-identity.p12", __dir__)
     sh("security", "export", "-k", CI_KEYCHAIN_PATH, "-t", "identities",
        "-f", "pkcs12", "-P", export_password, "-o", exported_path)
 
