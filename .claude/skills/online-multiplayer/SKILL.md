@@ -159,7 +159,7 @@ function forfeitRoom(roomId, myColor):
   - **教訓**: `allow create`/`allow update`とも、「同じフィールドに複数の書き込みパターンがあり、それぞれ前提条件が異なる」場合は、共通の前提条件でANDにまとめようとせず、パターンごとに完結した条件式を`OR`で結ぶこと。今回2回とも同じ種類のミス（本来は互いに排他的な複数ケースを、共通の前提条件で誤って束ねてしまう）を犯しており、再発しやすい罠だと考えられる。
 - `matchmakingQueue/{ticketId}`: 作成は`request.auth.uid == request.resource.data.uid`の場合のみ。更新（マッチ成立）は誰でも行える必要がある（相手のチケットを自分がマッチさせるトランザクションが発生するため）が、`status`を`'waiting'`から`'matched'`にする一方向の遷移のみ許可し、それ以外のフィールド改ざんは拒否する。削除（`cancelRandomMatch`）はチケット作成者本人のみ許可する。**【実際に踏んだ不具合】`allow delete`ルール自体が欠落しており、`cancelRandomMatch`が常に権限エラーで失敗する状態だった。** 結合テストでランダムマッチングを試した際、以前の失敗した試行が`waiting`状態のまま片付けられずゴミチケットとして残り続け、後続のテストが無関係な古いチケットとマッチしてしまうという形で発覚した（このゴミデータのせいでテスト結果が混乱したため、根本原因の特定にはやや遠回りした）。CRUD全操作（read/create/update/delete）を実装する際は、遷移させる`update`だけでなく`delete`のような「終わらせる」操作のルールも忘れずに定義すること。
 
-実際のルールファイルは`firestore.rules`（リポジトリルート）に、複合インデックスは`firestore.indexes.json`（リポジトリルート、`firebase.json`の`firestore.indexes`から参照）に実装する。**Firebaseへの反映はユーザー側の手動作業**（Firebase CLIのセットアップ、プロジェクトへのログインが必要なため）で、`firebase deploy --only firestore:rules,firestore:indexes --project <プロジェクトID>`で両方まとめて反映できる。**ルール・インデックスを変更した際は、このコマンドを再度実行しない限りFirebase側には反映されない**ことに注意する（コード変更をコミットしただけでは有効にならない）。
+実際のルールファイルは`firestore.rules`（リポジトリルート）に、複合インデックスは`firestore.indexes.json`（リポジトリルート、`firebase.json`の`firestore.indexes`から参照）に実装する。**ルール・インデックスを変更した際は、実際にデプロイコマンドを実行しない限りFirebase側には反映されない**ことに注意する（コード変更をコミットしただけでは有効にならない）。デプロイの実行手順（この開発環境からも直接実行できる・権限スコープの注意・本番反映前の確認）は[firestore-rules-deploy](../firestore-rules-deploy/SKILL.md)を参照。
 
 ## モジュール構成（`src/net/`）
 
