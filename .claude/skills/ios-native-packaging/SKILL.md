@@ -31,7 +31,8 @@ CLAUDE.mdの「配信」節に言う「将来的にはApp Storeでのネイテ�
 │                                      # コピーの両方がこれを使い、公開対象ファイルの一覧が2箇所で
 │                                      # 食い違わないようにする。
 └── .github/workflows/
-    └── ios-release.yml              # macOSランナーでのビルド・署名・TestFlight提出
+    ├── ios-release.yml              # macOSランナーでのビルド・署名・TestFlight提出
+    └── ios-bootstrap-signing.yml    # 持続的な署名identityの作成・エクスポート(手動起動のみ)
 ```
 
 `ios-app/`直下に独自の`package.json`を置くのは、リポジトリルートの「素のHTML/CSS/JS・ゼロ依存」方針（[CLAUDE.md](../../../CLAUDE.md)）を汚さないため。`training/`が独自の`pyproject.toml`を持つのと同じ考え方。
@@ -90,6 +91,28 @@ CLAUDE.mdの「配信」節に言う「将来的にはApp Storeでのネイテ�
 | `ASC_ISSUER_ID` | App Store Connect APIキーのIssuer ID |
 | `ASC_KEY_CONTENT` | APIキー(.p8)ファイルの内容をbase64エンコードしたもの |
 | `ASC_TEAM_ID` | Apple DeveloperのTeam ID |
+
+### 持続的な署名identityの再利用
+
+CIランナーは実行のたびにまっさらなキーチェーンから始まるため、`update_code_signing_settings` + `build_app`のAutomatic Signingに任せきりにすると、既存証明書の秘密鍵を引き継げず**実行のたびに新しい開発用証明書をAppleに発行させてしまう**。Appleはアカウントあたりの証明書発行数に上限があり、これを繰り返すと`Your account has reached the maximum number of certificates`でビルドできなくなる（実際に発生。下記「エッジケース・注意点」14参照）。
+
+対処として、一度作成した署名identity（証明書+秘密鍵）を`.p12`としてエクスポートし、GitHub Secretsに保存して以降のCI実行で使い回す。
+
+| Secret名 | 内容 |
+|---|---|
+| `IOS_SIGNING_P12_BASE64` | 署名identity（証明書+秘密鍵）の`.p12`をbase64エンコードしたもの |
+| `IOS_SIGNING_P12_PASSWORD` | 上記`.p12`を保護するパスワード（任意の値でよい。エクスポート時とインポート時で同じ値を使う） |
+
+**初回セットアップ／証明書を失効させ直した後の再セットアップ手順:**
+
+1. Apple Developer側の証明書発行数が上限に達している場合は、[Certificates, Identifiers & Profiles → Certificates](https://developer.apple.com/account/resources/certificates/list)で不要な「Apple Development」証明書を1つ失効(Revoke)させる（配布用のDistribution証明書には影響しない。TestFlight配信済みのビルドの動作にも影響しない）。
+2. `IOS_SIGNING_P12_PASSWORD` Secretsを（値は任意でよいので）登録する。
+3. [.github/workflows/ios-bootstrap-signing.yml](../../../.github/workflows/ios-bootstrap-signing.yml)を`workflow_dispatch`で手動起動し、`app-store-release`環境を承認する。**このワークフローの実行自体が証明書を1つ消費する**ため、むやみに繰り返し実行しない。
+4. 完了したワークフロー実行から`ios-signing-identity`アーティファクト（`exported-signing-identity.p12`、1日で自動失効）をダウンロードし、base64エンコードする（例: `base64 -i exported-signing-identity.p12 | pbcopy`）。
+5. その内容を`IOS_SIGNING_P12_BASE64` Secretsとして登録する。
+6. 以降の[ios-release.yml](../../../.github/workflows/ios-release.yml)（`bundle exec fastlane release`）は、この2つのSecretsが揃っていれば自動的にこのidentityをインポートして再利用し、新規証明書を発行しなくなる（[ios-app/fastlane/Fastfile](../../../ios-app/fastlane/Fastfile)の`release`レーン・`create_and_activate_ci_keychain`ヘルパー・`bootstrap_signing_identity`レーン参照）。プロビジョニングプロファイル自体は証明書と違い上限を気にせず再生成できるため、`-allowProvisioningUpdates`によるプロファイル同期はこれまで通り毎回行われる。
+
+キーチェーンの作成・証明書のインポート手順は、GitHub公式ドキュメント「[Installing an Apple certificate on macOS runners for Xcode development](https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development)」の推奨パターン（`$RUNNER_TEMP`配下に一時キーチェーンを作成→`security import`→`security set-key-partition-list`→検索リストに追加）をそのまま採用している。
 
 ### 実際の値（記録）
 
@@ -241,6 +264,7 @@ App Store Connectはビルドごとに「アプリの暗号化書類」（暗号
 11. **内部テストのみの配信でも、ビルドが「審査待ち」状態になり、テスターが「利用可能なビルドなし」のまま使えないことがある。** Appleの公式仕様上は「内部テスターは審査不要・アップロード後数分で利用可能」だが、実際には（原因を完全には特定できていないが）新規アップロード直後のビルドがTestFlightの「バージョン」一覧で「審査待ち」表示になり、ビルド詳細画面右上に赤い**「審査から削除」**ボタンが出ることがある（同種の未解決の報告: [fastlane/fastlane#19918](https://github.com/fastlane/fastlane/issues/19918)）。対処: ビルド詳細画面（TestFlightタブ → ビルド → 該当バージョン）を開き、**「審査から削除」を押す。** まだApp Store本審査に提出する準備ができていない段階なら、副作用なく安全に実行できる。
 12. **内部テストグループにテスターを追加しただけでは、招待メールは自動送信されない。** テスターを追加した直後は招待メールが届かず、TestFlightアプリを開いても「招待コード」入力を求められるだけの状態になることがある（このコードは通常入力する必要がなく、メールのリンク経由で自動的に解決されるべきもの）。対処: 「内部テスト」グループの「テスター」タブで、対象テスターの行にある**「再招待」ボタンを明示的にクリックする。** これで実際に招待メールが送信され、メール内の「View in TestFlight」リンクをiPhone上で開けばインストールできる。項目11の「審査から削除」とセットで詰まりやすいため、両方試すこと。
 13. **オンライン対戦（ランダムマッチング・プロフィール・ランキング）がTestFlight実機ではまったく進まない（Web版では問題なし）。** ビルド自体は成功していてもFirebase側の呼び出しがハングする、iOS（Capacitor）ネイティブシェル特有の既知の相性問題。原因・対処は[online-multiplayer「モジュール構成」の`firebase-init.js`項](../online-multiplayer/SKILL.md#モジュール構成srcnet)を参照（`initializeAuth`/`initializeFirestore`をiOS上でのみ明示設定に切り替えることで解消）。
+14. **`build_app`（archive）が「Choose a certificate to revoke. Your account has reached the maximum number of certificates.」「No profiles for '...' were found: ... iOS App Development provisioning profiles」で失敗する。** 項目10とエラーメッセージが似ているが原因は別（項目10はデバイス未登録、これは証明書発行数の上限到達）。CIランナーは毎回まっさらなキーチェーンで動くため、Automatic Signingは実行のたびに新しい開発用証明書の秘密鍵を生成せざるを得ず（既存証明書があってもCIには秘密鍵が残っていないため再利用できない）、これを繰り返すとAppleのアカウントあたりの証明書発行上限に達する。対処: (1) [Certificates, Identifiers & Profiles → Certificates](https://developer.apple.com/account/resources/certificates/list)で不要な証明書を失効させてビルドを通す、(2) 恒久対策として[持続的な署名identityの再利用](#持続的な署名identityの再利用)を導入し、以降のCI実行が証明書を消費しないようにする。
 
 ## 古いMacでのローカルデバッグの限界
 
