@@ -9,7 +9,9 @@ import {
   calculateEloDelta,
   getTier,
   getTierInfo,
+  createInitialRatingsByBoardSize,
 } from './rating.js';
+import { SUPPORTED_BOARD_SIZES } from '../logic/board.js';
 
 test('expectedScore is 0.5 when both players have the same score', () => {
   assert.equal(expectedScore(1500, 1500), 0.5);
@@ -103,4 +105,21 @@ test('getTierInfo returns the icon id and element symbol alongside the label', (
   assert.equal(getTierInfo(1850).symbol, 'Ag');
   assert.equal(getTierInfo(2500).symbol, 'C');
   assert.equal(getTierInfo(5000).id, 'carbon-nanotube');
+});
+
+test('createInitialRatingsByBoardSize seeds every supported board size independently', () => {
+  const ratings = createInitialRatingsByBoardSize();
+  assert.deepEqual(
+    Object.keys(ratings).map(Number).sort((a, b) => a - b),
+    SUPPORTED_BOARD_SIZES,
+  );
+  for (const boardSize of SUPPORTED_BOARD_SIZES) {
+    assert.deepEqual(ratings[boardSize], { score: DEFAULT_SCORE, gamesPlayed: 0 });
+  }
+});
+
+test('createInitialRatingsByBoardSize returns independent objects per board size', () => {
+  const ratings = createInitialRatingsByBoardSize();
+  ratings[SUPPORTED_BOARD_SIZES[0]].score = 9999;
+  assert.equal(ratings[SUPPORTED_BOARD_SIZES[1]].score, DEFAULT_SCORE);
 });

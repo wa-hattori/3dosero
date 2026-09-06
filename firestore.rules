@@ -29,9 +29,10 @@ service cloud.firestore {
       //    終わった時点で「既に終了した状態のレート戦の部屋」を自分で直接作り、
       //    レート戦の精算に使う（`settleRankedCpuMatch`参照）。白番は実在しない
       //    (常に空席)。Eloの計算開始点(`ratingSnapshot.black`)が自分の現在の
-      //    スコアと一致することをここで検証し、有利な開始点を偽って報告する
-      //    ことを防ぐ(1回の精算あたりの変動幅は`isReferencingUnsettledRankedWin`
-      //    側で別途±32に絞られる。詳細・既知の限界はSKILL.md参照)。
+      //    （この対局の盤面サイズにおける）スコアと一致することをここで検証し、
+      //    有利な開始点を偽って報告することを防ぐ(1回の精算あたりの変動幅は
+      //    `isReferencingUnsettledRankedWin`側で別途±32に絞られる。詳細・既知の
+      //    限界はSKILL.md参照)。
       allow create: if request.auth != null
         && (
           (request.resource.data.players.black == request.auth.uid
@@ -47,8 +48,18 @@ service cloud.firestore {
             && request.resource.data.settled.black == false
             && request.resource.data.settled.white == true
             && request.resource.data.ratingSnapshot.black
-              == get(/databases/$(database)/documents/players/$(request.auth.uid)).data.score)
+              == myRatingScoreForBoardSize(request.resource.data.boardSize))
         );
+
+      // スコアは盤面サイズごとに独立管理する（`players/{playerId}`の`ratings`
+      // マップ）ため、対応する盤面サイズのエントリだけを読む。ルール言語は
+      // 動的なマップキーの型変換を保証しないため、既知の3つの盤面サイズを
+      // 明示的な三項演算子で振り分ける
+      // （`isMyTurn`のcurrentTurn数値リテラルと同じ事情）。
+      function myRatingScoreForBoardSize(boardSize) {
+        let ratings = get(/databases/$(database)/documents/players/$(request.auth.uid)).data.ratings;
+        return boardSize == 4 ? ratings['4'].score : (boardSize == 6 ? ratings['6'].score : ratings['8'].score);
+      }
 
       // 更新は「参加（白番の空席を自分で埋める）」「既存参加者が自分の手番で着手する」
       // 「既存参加者が対局を放棄する（相手の手番中でも可）」「レート戦の結果を自分の分
@@ -155,7 +166,8 @@ service cloud.firestore {
       // ランキング表示のため、誰でも読める。
       allow read: if true;
 
-      // 新規作成は本人のuidでのみ、名前は1〜20文字、スコア・対局数は初期値のみ許可する。
+      // 新規作成は本人のuidでのみ、名前は1〜20文字、対応する全盤面サイズ
+      // （4×4×4／6×6×6／8×8×8）分のスコア・対局数が初期値のみ許可する。
       // 1500/20はsrc/net/rating.jsのDEFAULT_SCORE/MAX_NAME_LENGTHをそのまま数値
       // リテラルにしたもの(ルール言語からはJSの定数をimportできないため。
       // currentTurnのBLACK(1)/WHITE(2)と同じ事情)。定数を変更したらここも合わせる。
@@ -164,37 +176,60 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 20
-        && request.resource.data.score == 1500
-        && request.resource.data.gamesPlayed == 0;
+        && request.resource.data.ratings['4'].score == 1500
+        && request.resource.data.ratings['4'].gamesPlayed == 0
+        && request.resource.data.ratings['6'].score == 1500
+        && request.resource.data.ratings['6'].gamesPlayed == 0
+        && request.resource.data.ratings['8'].score == 1500
+        && request.resource.data.ratings['8'].gamesPlayed == 0;
 
-      // 名前の変更（スコア・対局数は変えない）。
+      // 名前の変更（スコア・対局数は変えない。`ratings`マップ全体が不変であることを
+      // 確認することで、全盤面サイズ分をまとめて検証する）。
       allow update: if request.auth != null
         && request.auth.uid == playerId
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 20
-        && request.resource.data.score == resource.data.score
-        && request.resource.data.gamesPlayed == resource.data.gamesPlayed;
+        && request.resource.data.ratings == resource.data.ratings;
 
-      // レート戦（ランダムマッチング）の結果によるスコア更新（名前は変えない）。
-      // 32はsrc/net/rating.jsのMAX_SCORE_DELTA(=K_FACTOR)をそのまま数値リテラルに
-      // したもの(ルール言語からはJSの定数をimportできない事情は他の箇所と同じ)。
-      // `lastSettledRoomId`で参照した部屋が実在し、終了済みのレート戦で、
-      // 自分がまだこの部屋の結果を精算していないことをget()で確認する
-      // （[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)の
+      // レート戦（ランダムマッチング）の結果によるスコア更新（名前・他の盤面サイズの
+      // レーティングは変えない）。スコアは盤面サイズごとに独立管理するため、
+      // 更新後のドキュメントで「ちょうど1つの盤面サイズの`ratings`エントリだけが
+      // 期待通りに変化し、残り2つは不変」であることを検証する。32はsrc/net/rating.js
+      // のMAX_SCORE_DELTA(=K_FACTOR)をそのまま数値リテラルにしたもの(ルール言語から
+      // はJSの定数をimportできない事情は他の箇所と同じ)。`lastSettledRoomId`で
+      // 参照した部屋が実在し、終了済みのレート戦であり、その部屋の`boardSize`が
+      // 更新対象の盤面サイズと一致し、自分がまだこの部屋の結果を精算していないことを
+      // get()で確認する（[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)の
       // 「不正防止の方針」参照。既知の限界も同節に記載）。
       allow update: if request.auth != null
         && request.auth.uid == playerId
         && request.resource.data.name == resource.data.name
-        && request.resource.data.gamesPlayed == resource.data.gamesPlayed + 1
-        && request.resource.data.score >= resource.data.score - 32
-        && request.resource.data.score <= resource.data.score + 32
-        && isReferencingUnsettledRankedWin(request.resource.data.lastSettledRoomId);
+        && (
+          (isValidRatingUpdate('4', '6', '8', resource.data, request.resource.data)
+            && isReferencingUnsettledRankedWin(request.resource.data.lastSettledRoomId, 4))
+          || (isValidRatingUpdate('6', '4', '8', resource.data, request.resource.data)
+            && isReferencingUnsettledRankedWin(request.resource.data.lastSettledRoomId, 6))
+          || (isValidRatingUpdate('8', '4', '6', resource.data, request.resource.data)
+            && isReferencingUnsettledRankedWin(request.resource.data.lastSettledRoomId, 8))
+        );
 
-      function isReferencingUnsettledRankedWin(roomId) {
+      // `boardSizeKey`の盤面サイズの`ratings`エントリだけが「対局数+1、スコアの
+      // 変化幅が±32以内」で変化し、他の2盤面サイズ（`otherKey1`/`otherKey2`）の
+      // エントリは完全に不変であることを検証する。
+      function isValidRatingUpdate(boardSizeKey, otherKey1, otherKey2, before, after) {
+        return after.ratings[otherKey1] == before.ratings[otherKey1]
+          && after.ratings[otherKey2] == before.ratings[otherKey2]
+          && after.ratings[boardSizeKey].gamesPlayed == before.ratings[boardSizeKey].gamesPlayed + 1
+          && after.ratings[boardSizeKey].score >= before.ratings[boardSizeKey].score - 32
+          && after.ratings[boardSizeKey].score <= before.ratings[boardSizeKey].score + 32;
+      }
+
+      function isReferencingUnsettledRankedWin(roomId, boardSize) {
         let room = get(/databases/$(database)/documents/rooms/$(roomId)).data;
         return room.status == 'finished'
           && room.ranked == true
+          && room.boardSize == boardSize
           && (
             (room.players.black == request.auth.uid && room.settled.black == false)
             || (room.players.white == request.auth.uid && room.settled.white == false)

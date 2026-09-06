@@ -3,6 +3,8 @@
  * 置く（[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)参照）。
  */
 
+import { SUPPORTED_BOARD_SIZES } from '../logic/board.js';
+
 /** プレイヤーの初期スコア。 */
 export const DEFAULT_SCORE = 1500;
 
@@ -76,3 +78,15 @@ export const getTierInfo = (score) => TIERS.find((tier) => score < tier.threshol
  * @returns {string} 階級の表示名
  */
 export const getTier = (score) => getTierInfo(score).label;
+
+/**
+ * 対応する全盤面サイズ分の初期レーティング（スコア・対局数）マップを組み立てる。
+ * スコア・階級・対局数は盤面サイズ（4×4×4／6×6×6／8×8×8）ごとに独立管理する
+ * （[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)の
+ * 「データモデル」参照）。プレイヤープロフィール新規作成時の初期値として使う。
+ * @returns {Record<number, { score: number, gamesPlayed: number }>}
+ */
+export const createInitialRatingsByBoardSize = () =>
+  Object.fromEntries(
+    SUPPORTED_BOARD_SIZES.map((boardSize) => [boardSize, { score: DEFAULT_SCORE, gamesPlayed: 0 }]),
+  );

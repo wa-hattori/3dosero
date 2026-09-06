@@ -236,6 +236,14 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
           showOnlineMethodStep();
           return;
         }
+        if (selectedBattleMode === 'ranking') {
+          showRankingStep();
+          return;
+        }
+        if (selectedBattleMode === 'profile') {
+          showProfileStep();
+          return;
+        }
         finishSelection();
       });
       buttonRow.appendChild(button);
@@ -318,8 +326,8 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     try {
       const summary = await getRoomSummary(roomId);
       const [black, white] = await Promise.all([
-        summary?.players?.black ? getPlayerProfile(summary.players.black) : null,
-        summary?.players?.white ? getPlayerProfile(summary.players.white) : null,
+        summary?.players?.black ? getPlayerProfile(summary.players.black, selectedBoardSize) : null,
+        summary?.players?.white ? getPlayerProfile(summary.players.white, selectedBoardSize) : null,
       ]);
       createVsScreen(container, {
         black,
@@ -356,7 +364,7 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     // プロフィール確認自体も失敗しうる(権限エラー・ネットワーク断)ため、この関数全体を
     // 1つのtry/catchで包む(ここだけ外に出すとエラー時に無反応のまま固まってしまう)。
     try {
-      const profile = await getMyPlayerProfile();
+      const profile = await getMyPlayerProfile(selectedBoardSize);
       if (!profile) {
         showPlayerNameStep();
         return;
@@ -465,23 +473,24 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
   };
 
   const showRankingStep = async () => {
+    const boardSizeLabel = `${selectedBoardSize}×${selectedBoardSize}×${selectedBoardSize}`;
     subtitle.textContent = 'ランキングを読み込んでいます…';
     backButton.hidden = false;
-    backButton.textContent = '← モード選択に戻る';
+    backButton.textContent = '← 盤面サイズ選択に戻る';
     currentStep = 'ranking';
     clearError();
     clearButtons();
 
     try {
-      const entries = await fetchLeaderboard();
+      const entries = await fetchLeaderboard(selectedBoardSize);
       if (currentStep !== 'ranking') return; // 読み込み中に他の画面へ移動していたら何もしない
 
       if (entries.length === 0) {
-        subtitle.textContent = 'まだランキングデータがありません（ランダムマッチングで対局すると登録されます）';
+        subtitle.textContent = `${boardSizeLabel} まだランキングデータがありません（ランダムマッチングで対局すると登録されます）`;
         return;
       }
 
-      subtitle.textContent = `ランキング 上位${entries.length}名（ランダムマッチングの結果のみ集計）`;
+      subtitle.textContent = `${boardSizeLabel} ランキング 上位${entries.length}名（ランダムマッチングの結果のみ集計）`;
       for (const [index, entry] of entries.entries()) {
         const row = document.createElement('li');
         row.className = 'start-screen-ranking-row';
@@ -497,15 +506,16 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
   };
 
   const showProfileStep = async () => {
+    const boardSizeLabel = `${selectedBoardSize}×${selectedBoardSize}×${selectedBoardSize}`;
     subtitle.textContent = 'プロフィールを読み込んでいます…';
     backButton.hidden = false;
-    backButton.textContent = '← モード選択に戻る';
+    backButton.textContent = '← 盤面サイズ選択に戻る';
     currentStep = 'profile';
     clearError();
     clearButtons();
 
     try {
-      const profile = await getMyPlayerProfile();
+      const profile = await getMyPlayerProfile(selectedBoardSize);
       if (currentStep !== 'profile') return; // 読み込み中に他の画面へ移動していたら何もしない
 
       if (!profile) {
@@ -514,7 +524,7 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
         return;
       }
 
-      subtitle.textContent = '';
+      subtitle.textContent = boardSizeLabel;
 
       const nameLine = document.createElement('p');
       nameLine.className = 'start-screen-profile-name';
@@ -561,7 +571,10 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     rankingButton.textContent = 'ランキングを見る';
     rankingButton.addEventListener('click', () => {
       playClickSound();
-      showRankingStep();
+      // ランキングは盤面サイズごとに独立集計のため、先に盤面サイズを選ばせる
+      // （[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)参照）。
+      selectedBattleMode = 'ranking';
+      showBoardSizeStep();
     });
     buttonRow.appendChild(rankingButton);
 
@@ -570,7 +583,10 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     profileButton.textContent = 'プロフィール';
     profileButton.addEventListener('click', () => {
       playClickSound();
-      showProfileStep();
+      // スコア・階級は盤面サイズごとに独立管理のため、先に盤面サイズを選ばせる
+      // （[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)参照）。
+      selectedBattleMode = 'profile';
+      showBoardSizeStep();
     });
     buttonRow.appendChild(profileButton);
   };
@@ -587,6 +603,10 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
     }
     if (currentStep === 'onlineJoin' || currentStep === 'playerName') {
       showOnlineMethodStep();
+      return;
+    }
+    if (currentStep === 'ranking' || currentStep === 'profile') {
+      showBoardSizeStep();
       return;
     }
     if (currentStep === 'onlineWaiting') {

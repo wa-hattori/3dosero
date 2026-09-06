@@ -13,22 +13,26 @@ const PLAYERS_COLLECTION = 'players';
 export const LEADERBOARD_SIZE = 100;
 
 /**
- * スコア上位者を取得する。単一フィールドの並べ替えのみのため、複合インデックスは
+ * 指定した盤面サイズのスコア上位者を取得する。スコアは盤面サイズごとに
+ * 独立管理するため（[ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)参照）、
+ * その盤面サイズでまだ1局も対局していないプレイヤー（`ratings`に該当エントリが
+ * ない）は結果に含まれない。単一フィールドの並べ替えのみのため、複合インデックスは
  * 不要（Firestoreが単一フィールドインデックスを自動的に用意する）。表示は名前と
  * スコアのみのため、取得結果もその2つに絞る。
+ * @param {number} boardSize - ランキングを取得したい盤面サイズ
  * @returns {Promise<Array<{ name: string, score: number }>>}
  *   スコア降順。認証は不要（`players`コレクションは誰でも読める設計のため）。
  */
-export const fetchLeaderboard = async () => {
+export const fetchLeaderboard = async (boardSize) => {
   const db = getFirestoreInstance();
   const leaderboardQuery = query(
     collection(db, PLAYERS_COLLECTION),
-    orderBy('score', 'desc'),
+    orderBy(`ratings.${boardSize}.score`, 'desc'),
     limit(LEADERBOARD_SIZE),
   );
   const snapshot = await getDocs(leaderboardQuery);
   return snapshot.docs.map((docSnapshot) => {
     const data = docSnapshot.data();
-    return { name: data.name, score: data.score };
+    return { name: data.name, score: data.ratings[boardSize].score };
   });
 };

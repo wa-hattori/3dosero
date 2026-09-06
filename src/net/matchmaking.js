@@ -36,6 +36,18 @@ const PLAYERS_COLLECTION = 'players';
 const MAX_CANDIDATES = 5;
 
 /**
+ * プレイヤープロフィールのスナップショットから、指定した盤面サイズの現在の
+ * スコアを取り出す。プロフィール未作成・該当盤面サイズ未対局（万一の異常系）は
+ * `DEFAULT_SCORE`扱いにする（スコアは盤面サイズごとに独立管理するため。
+ * [ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)参照）。
+ * @param {import('firebase/firestore').DocumentSnapshot} profileSnapshot
+ * @param {number} boardSize
+ * @returns {number}
+ */
+const scoreForBoardSize = (profileSnapshot, boardSize) =>
+  profileSnapshot.exists() ? profileSnapshot.data().ratings?.[boardSize]?.score ?? DEFAULT_SCORE : DEFAULT_SCORE;
+
+/**
  * 待機中の候補チケットを、トランザクション内で再確認してから奪い合いなく確保し、
  * 新しい部屋を作る。既に他クライアントに先を越されていた場合は`null`を返す
  * （呼び出し側は次の候補にフォールバックする）。
@@ -56,13 +68,11 @@ const tryClaimCandidate = async ({ db, candidateRef, myTicketRef, myUid, boardSi
     // レーティング戦（ランダムマッチングのみ対象）のため、マッチ成立時点の
     // 両者のスコアを部屋にスナップショットしておく（対局後のElo計算の基準値。
     // [ranked-matchmaking](../../.claude/skills/ranked-matchmaking/SKILL.md)参照）。
-    // プロフィール未作成（万一の異常系）はDEFAULT_SCORE扱いにして、
-    // マッチング自体は止めない。
     // Firestoreのトランザクション内では読み取りを順番に(並行にせず)行う必要がある。
     const myProfile = await transaction.get(doc(db, PLAYERS_COLLECTION, myUid));
     const opponentProfile = await transaction.get(doc(db, PLAYERS_COLLECTION, opponentUid));
-    const myScore = myProfile.exists() ? myProfile.data().score : DEFAULT_SCORE;
-    const opponentScore = opponentProfile.exists() ? opponentProfile.data().score : DEFAULT_SCORE;
+    const myScore = scoreForBoardSize(myProfile, boardSize);
+    const opponentScore = scoreForBoardSize(opponentProfile, boardSize);
 
     const roomId = generateRoomCode();
     transaction.set(doc(db, ROOMS_COLLECTION, roomId), {
