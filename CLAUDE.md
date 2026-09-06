@@ -100,9 +100,9 @@ GANベースCPU対戦相手の学習コード（`training/` 配下）に適用�
 
 ## 開発の進め方
 
-1. 次のタスクに着手する前に、関連する rules/skills を確認する（不明なら `/plan-step` で短い計画を立てる）。
+1. 次のタスクに着手する前に、関連する rules/skills を確認する（不明なら `/plan-step` で短い計画を立てる）。`main`が`origin/main`から遅れていないか`git fetch`で確認する。
 2. **コードに変更を加える前に、`main`から作業ブランチを切る（`main`への直接コミットはしない）。** ブランチ名は `<type>_<short_description>`（例: `feat_ranked_score_per_board_size`）。詳細・唯一の例外（リリース時のバージョンバンプ）は [git-workflow.mdのブランチ運用](.claude/rules/common/git-workflow.md#ブランチ運用) を参照。
 3. ゲームロジックは TDD ループ（[tdd-loop](.claude/skills/tdd-loop/SKILL.md)）で実装する。
 4. 動作確認できたら、その場で `/commit`（または `commit-crafter` エージェント）を使って Angular 形式の小さなコミットを作る。まとめて後でコミットしない。**1コミットに複数の関心事（データモデル・アプリコード・設定・UI・ドキュメントなど）を詰め込まない。** 変更ファイル数が多くなってきたら都度レイヤーごとに分割できないか検討する（[git-workflow.mdのコミット粒度](.claude/rules/common/git-workflow.md#このプロジェクトでのコミット粒度)参照）。
 5. 3D反転ロジックを実装・変更する際は必ず [othello-3d-flip-rule](.claude/skills/othello-3d-flip-rule/SKILL.md) のアルゴリズムを正本として参照し、独自に再導出しない。
-6. 作業ブランチでの変更がまとまったら`main`にマージする（[git-workflow.mdのブランチ運用](.claude/rules/common/git-workflow.md#ブランチ運用)参照）。
+6. 作業ブランチでの変更がまとまったら`main`にマージし、**`git push origin main`まで自分（Claude Code）で行う**（このリポジトリはpushが委譲済み。詳細は [git-workflow.mdのpush権限](.claude/rules/common/git-workflow.md#この開発環境claude-codeからのpush権限) 参照）。Firestoreルール/インデックスの変更が含まれる場合は [firestore-rules-deploy](.claude/skills/firestore-rules-deploy/SKILL.md) の手順でデプロイまで行う（このリポジトリでは同様に確認なしで実行してよい）。バージョンタグのpush（リリース）は引き続き [release-tagging](.claude/skills/release-tagging/SKILL.md) の手順に従い、タイミングはユーザーの判断を仰ぐ。
