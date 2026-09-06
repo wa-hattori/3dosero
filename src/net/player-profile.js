@@ -9,6 +9,7 @@
  */
 
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { SUPPORTED_BOARD_SIZES } from '../logic/board.js';
 import { DEFAULT_SCORE, createInitialRatingsByBoardSize } from './rating.js';
 import { ensureSignedIn, getFirestoreInstance } from './firebase-init.js';
 
@@ -17,11 +18,20 @@ const PLAYERS_COLLECTION = 'players';
 const playerRef = (uid) => doc(getFirestoreInstance(), PLAYERS_COLLECTION, uid);
 
 /**
+ * プレイヤードキュメントのデータから、指定した盤面サイズのスコア・対局数を
+ * 取り出す。その盤面サイズでまだ対局したことがない（`ratings`に該当エントリが
+ * ない）場合は初期値扱いにする。
+ * @param {object} data - `players/{uid}`ドキュメントのデータ
+ * @param {number} boardSize
+ * @returns {{ score: number, gamesPlayed: number }}
+ */
+const ratingForBoardSize = (data, boardSize) =>
+  data.ratings?.[boardSize] ?? { score: DEFAULT_SCORE, gamesPlayed: 0 };
+
+/**
  * 指定したuid・盤面サイズのプレイヤープロフィールを取得する。プロフィール自体が
- * 未作成の場合は`null`を返す。プロフィールは存在するが、その盤面サイズでまだ
- * 対局したことがない（`ratings`に該当エントリがない）場合は初期値扱いにする。
- * 認証は不要（`players`コレクションは誰でも読める設計のため）。対戦相手の
- * プロフィール表示（マッチング成立時の対戦カード等）に使う。
+ * 未作成の場合は`null`を返す。認証は不要（`players`コレクションは誰でも読める
+ * 設計のため）。対戦相手のプロフィール表示（マッチング成立時の対戦カード等）に使う。
  * @param {string} uid - 取得したいプレイヤーのuid
  * @param {number} boardSize - スコア・対局数を取得したい盤面サイズ
  * @returns {Promise<{ uid: string, name: string, score: number, gamesPlayed: number } | null>}
@@ -31,7 +41,7 @@ export const getPlayerProfile = async (uid, boardSize) => {
   if (!snapshot.exists()) return null;
 
   const data = snapshot.data();
-  const rating = data.ratings?.[boardSize] ?? { score: DEFAULT_SCORE, gamesPlayed: 0 };
+  const rating = ratingForBoardSize(data, boardSize);
   return { uid, name: data.name, score: rating.score, gamesPlayed: rating.gamesPlayed };
 };
 
@@ -43,6 +53,27 @@ export const getPlayerProfile = async (uid, boardSize) => {
 export const getMyPlayerProfile = async (boardSize) => {
   const uid = await ensureSignedIn();
   return getPlayerProfile(uid, boardSize);
+};
+
+/**
+ * 自分のプレイヤープロフィールを、対応する全盤面サイズ分のスコア・対局数と
+ * まとめて取得する。まだ作成していなければ`null`を返す。プロフィール画面
+ * （全モード一括表示）専用で、1回のドキュメント読み取りで済ませる
+ * （`getMyPlayerProfile`を盤面サイズの数だけ呼ぶと同じドキュメントを何度も
+ * 読むことになるため）。
+ * @returns {Promise<{ uid: string, name: string, ratings: Array<{ boardSize: number, score: number, gamesPlayed: number }> } | null>}
+ */
+export const getMyProfileSummary = async () => {
+  const uid = await ensureSignedIn();
+  const snapshot = await getDoc(playerRef(uid));
+  if (!snapshot.exists()) return null;
+
+  const data = snapshot.data();
+  const ratings = SUPPORTED_BOARD_SIZES.map((boardSize) => ({
+    boardSize,
+    ...ratingForBoardSize(data, boardSize),
+  }));
+  return { uid, name: data.name, ratings };
 };
 
 /**
