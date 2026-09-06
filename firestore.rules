@@ -1,8 +1,8 @@
 // Firestoreセキュリティルール。正本: .claude/skills/online-multiplayer/SKILL.md の
 // 「Firestoreセキュリティルール」節。
 //
-// 反映は `firebase deploy --only firestore:rules`（Firebase CLIのセットアップ・
-// プロジェクトへのログインが必要なユーザー側の手動作業）。
+// 反映は `firebase deploy --only firestore:rules`。実行手順・注意点は
+// .claude/skills/firestore-rules-deploy/SKILL.md を参照。
 //
 // 信頼境界: ここで強制するのは「誰が」「いつ（自分の手番か）」書き込めるかまで。
 // 着手が26方向反転ルール上合法かどうかはクライアント側(src/logic/)の検証に委ねる

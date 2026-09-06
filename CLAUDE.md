@@ -93,7 +93,7 @@ GANベースCPU対戦相手の学習コード（`training/` 配下）に適用�
 ## `.claude/` の使い分け
 
 - **rules/** — 常に従うべき指針。`common/` は言語非依存（Git運用・テスト方針）、`javascript/` はJS/Three.js固有の規約、`python/` はPython/学習コード固有の規約。作業前提として常に有効。
-- **skills/** — コマンドやエージェントから呼び出す再利用可能なワークフロー定義（TDDループ、アトミックコミット手順、3D反転ルールの正本、静的デプロイ手順、バージョンタグ運用手順、iOSネイティブ配信の正本、オンライン対戦の正本、レート戦（ランキング）の正本、オンライン対戦タイマーの正本、iOS広告表示の正本）。
+- **skills/** — コマンドやエージェントから呼び出す再利用可能なワークフロー定義（TDDループ、アトミックコミット手順、3D反転ルールの正本、静的デプロイ手順、バージョンタグ運用手順、iOSネイティブ配信の正本、オンライン対戦の正本、Firestoreルール/インデックスのデプロイ手順、レート戦（ランキング）の正本、オンライン対戦タイマーの正本、iOS広告表示の正本）。
 - **agents/** — 限定的な範囲を持つタスク専門のサブエージェント（ゲームロジックレビュー、Three.js実装、学習コード実装/レビュー、コミット作成）。
 - **commands/** — スラッシュコマンド（`/commit`, `/plan-step`）。エージェントやスキルを起動するショートカット。
 - **hooks/** — ツール実行時の自動チェック（コミットメッセージのAngular規約検証、`console.log`/`debugger`残留の警告）。`settings.json` で登録。
@@ -101,6 +101,8 @@ GANベースCPU対戦相手の学習コード（`training/` 配下）に適用�
 ## 開発の進め方
 
 1. 次のタスクに着手する前に、関連する rules/skills を確認する（不明なら `/plan-step` で短い計画を立てる）。
-2. ゲームロジックは TDD ループ（[tdd-loop](.claude/skills/tdd-loop/SKILL.md)）で実装する。
-3. 動作確認できたら、その場で `/commit`（または `commit-crafter` エージェント）を使って Angular 形式の小さなコミットを作る。まとめて後でコミットしない。
-4. 3D反転ロジックを実装・変更する際は必ず [othello-3d-flip-rule](.claude/skills/othello-3d-flip-rule/SKILL.md) のアルゴリズムを正本として参照し、独自に再導出しない。
+2. **コードに変更を加える前に、`main`から作業ブランチを切る（`main`への直接コミットはしない）。** ブランチ名は `<type>_<short_description>`（例: `feat_ranked_score_per_board_size`）。詳細・唯一の例外（リリース時のバージョンバンプ）は [git-workflow.mdのブランチ運用](.claude/rules/common/git-workflow.md#ブランチ運用) を参照。
+3. ゲームロジックは TDD ループ（[tdd-loop](.claude/skills/tdd-loop/SKILL.md)）で実装する。
+4. 動作確認できたら、その場で `/commit`（または `commit-crafter` エージェント）を使って Angular 形式の小さなコミットを作る。まとめて後でコミットしない。**1コミットに複数の関心事（データモデル・アプリコード・設定・UI・ドキュメントなど）を詰め込まない。** 変更ファイル数が多くなってきたら都度レイヤーごとに分割できないか検討する（[git-workflow.mdのコミット粒度](.claude/rules/common/git-workflow.md#このプロジェクトでのコミット粒度)参照）。
+5. 3D反転ロジックを実装・変更する際は必ず [othello-3d-flip-rule](.claude/skills/othello-3d-flip-rule/SKILL.md) のアルゴリズムを正本として参照し、独自に再導出しない。
+6. 作業ブランチでの変更がまとまったら`main`にマージする（[git-workflow.mdのブランチ運用](.claude/rules/common/git-workflow.md#ブランチ運用)参照）。
