@@ -95,3 +95,15 @@ and declining it is fully supported (non-personalized ads are shown
 instead). See the privacy policy for details:
 https://wa-hattori.github.io/3dosero/privacy.html
 ```
+
+## その他のApp Store Connect設定
+
+上記以外に、App作成時・提出時にApp Store Connect上で聞かれる項目。個人開発・無料・App内課金なしという前提での回答。
+
+- **使用許諾契約（EULA）**: Appleの標準ライセンス契約（Standard Apple License Agreement）のまま。独自のEULAは、サブスクリプション条件・免責事項等の特別な利用規約が必要な場合にのみ使うもので、このアプリには不要。
+- **アプリの暗号化に関する書類（輸出コンプライアンス）**: `Info.plist`の`ITSAppUsesNonExemptEncryption=false`（[ios-native-packaging](../.claude/skills/ios-native-packaging/SKILL.md)の「輸出コンプライアンス」節参照）により、通常はビルドごとの質問自体がスキップされる。万一質問された場合は「暗号化を使用している（標準的なHTTPSのみ）」「米国輸出管理規則の免除規定に該当する（独自の暗号化アルゴリズムは実装していない）」と回答する。
+- **App Storeの規制と許可**:
+  - デジタルサービス法（EU、Trader情報の申告）: 個人開発（法人登録なし）のため「Trader（事業者）に該当しない」を選択する。
+  - ベトナムゲームライセンス: 実物資産の取引・ギャンブル性のあるゲーム等が対象で、本アプリ（課金なしの対戦ボードゲーム）は該当しないため空欄のままでよい。
+  - 規制対象の医療用デバイス: 該当なし。何もしない。
+- **アプリ用共有シークレット**: App内課金（特にサブスクリプション）のレシート検証に使うもの。本アプリはApp内課金自体が無い（上記「App Privacy」節・[ios-native-packaging](../.claude/skills/ios-native-packaging/SKILL.md)の「App ID登録時のCapabilities」参照）ため設定不要、空欄のままでよい。
