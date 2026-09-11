@@ -83,7 +83,7 @@ export const createStartScreen = (container, onStart, onFirstInteraction) => {
   overlay.className = 'start-screen';
 
   const title = document.createElement('h1');
-  title.textContent = '高次元オセロ';
+  title.textContent = '三次元オセロ';
   overlay.appendChild(title);
 
   const subtitle = document.createElement('p');
