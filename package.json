@@ -1,6 +1,6 @@
 {
   "name": "3dosero",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "description": "8x8x8 3D Othello (Reversi) played across eight stacked 8x8 boards",
   "type": "module",
