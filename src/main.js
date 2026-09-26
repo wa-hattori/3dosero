@@ -28,6 +28,7 @@ import { setCountdownBeepMuted } from './audio/countdown-beep.js';
 import { createMuteToggle } from './ui/mute-toggle.js';
 import { createTitleButton } from './ui/title-button.js';
 import { createVersionBadge } from './ui/version-badge.js';
+import { createAppStoreBadge } from './ui/app-store-badge.js';
 
 /** 対戦モードごとの対局画面スターフィールドの色調。 */
 const BATTLE_STARFIELD_COLORS = {
@@ -79,6 +80,7 @@ createMuteToggle(uiOverlay, (muted) => {
   setCountdownBeepMuted(muted);
 });
 createVersionBadge(uiOverlay);
+createAppStoreBadge(uiOverlay);
 
 /**
  * 選択された対戦モード・盤面サイズ・CPUレベル（・オンライン接続情報）で対局を開始する。
